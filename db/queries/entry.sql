@@ -17,6 +17,16 @@ WHERE
 ORDER BY id 
 LIMIT 1;
 
+-- name: GetEntry :one
+SELECT
+    id,
+    account_id,
+    amount,
+    created_at
+FROM
+    entries
+WHERE
+    id = $1;
 
 -- name: ListEntriesByAccountId :many
 SELECT 
