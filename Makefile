@@ -14,8 +14,10 @@ sqlc:
 	sqlc generate
 test:
 	go test -v -cover ./...
+server:
+	go run main.go
 migrateup:
 	migrate -path db/migrations -database "$(POSTGRES_URL)" -verbose up
 migratedown:
 	migrate -path db/migrations -database "$(POSTGRES_URL)" -verbose down
-.PHONY: postgres createdb dropdb sqlc migrateup migratedown test
+.PHONY: postgres createdb dropdb sqlc migrateup migratedown test server
