@@ -10,6 +10,6 @@ type GetAccountRequest struct {
 }
 
 type ListAccountRequest struct {
-	Page int32 `form:"page" binding:"required,min=1"`
+	Page int32 `form:"page,default=1" binding:"min=1"`
 	Size int32 `form:"size" binding:"required,min=5,max=10"`
 }
