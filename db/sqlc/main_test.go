@@ -6,20 +6,24 @@ import (
 	"os"
 	"testing"
 
+	cf "github.com/ChokeGuy/simple-bank/pkg/config"
+
 	_ "github.com/lib/pq"
 )
 
 var testQueries *Queries
 var testDb *sql.DB
 
-const (
-	dbDriver = "postgres"
-	dbSource = "postgresql://root:123456@localhost:5432/simple-bank?sslmode=disable"
-)
-
 func TestMain(m *testing.M) {
+
 	var err error
-	testDb, err = sql.Open(dbDriver, dbSource)
+	cf, err := cf.LoadConfig("../..")
+
+	if err != nil {
+		log.Fatalf("cannot load config: %v", err)
+	}
+
+	testDb, err = sql.Open(cf.DBDriver, cf.DBSource)
 
 	if err != nil {
 		log.Fatalf("cannot connect to db: %v", err)
