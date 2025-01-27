@@ -59,6 +59,3 @@ jobs:
 
       - name: Run tests
         run: make test
-      
-      - name: Run server
-        run: make server
