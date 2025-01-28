@@ -13,3 +13,7 @@ type ListAccountRequest struct {
 	Page int32 `form:"page,default=1" binding:"min=1"`
 	Size int32 `form:"size" binding:"required,min=5,max=10"`
 }
+
+type DeleteAccountRequest struct {
+	ID int64 `uri:"id" binding:"required,min=1"`
+}

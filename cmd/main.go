@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ChokeGuy/simple-bank/api"
+	"github.com/ChokeGuy/simple-bank/api/account"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
+	"github.com/ChokeGuy/simple-bank/server"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	cf, err := cf.LoadConfig(".")
+	cf, err := cf.LoadConfig("./")
 
 	if err != nil {
 		log.Fatalf("cannot load config: %v", err)
@@ -28,7 +29,11 @@ func main() {
 	}
 
 	store := db.NewStore(conn)
-	server := api.NewServer(store)
+	server := server.NewServer(store)
+
+	//Routes
+	accountHandler := account.NewAccountHandler(server)
+	accountHandler.MapRoutes()
 
 	err = server.Start(cf.ServerAddress)
 	if err != nil {
