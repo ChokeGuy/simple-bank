@@ -95,6 +95,9 @@ func TestGetAccountApi(t *testing.T) {
 
 			//start new server
 			server := server.NewServer(store)
+			accountHandler := NewAccountHandler(server)
+			accountHandler.MapRoutes()
+
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/account/%d", tc.accountID)
@@ -189,6 +192,8 @@ func TestCreateccountApi(t *testing.T) {
 
 			//start new server
 			server := server.NewServer(store)
+			accountHandler := NewAccountHandler(server)
+			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
 
 			url := "/account"
@@ -291,6 +296,8 @@ func TestListccountApi(t *testing.T) {
 
 			//start new server
 			server := server.NewServer(store)
+			accountHandler := NewAccountHandler(server)
+			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/accounts?page=%d&size=%d", tc.query.Page, tc.query.Size)
@@ -430,6 +437,8 @@ func TestDeleteAccountApi(t *testing.T) {
 
 			//start new server
 			server := server.NewServer(store)
+			accountHandler := NewAccountHandler(server)
+			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
 
 			url := fmt.Sprintf("/account/%d", tc.accountID)
