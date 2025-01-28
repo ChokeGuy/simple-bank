@@ -14,13 +14,13 @@ import (
 	mockdb "github.com/ChokeGuy/simple-bank/db/mock"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/server"
-	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
 
+// TestGetAccountApi tests the GetAccount API handler
 func TestGetAccountApi(t *testing.T) {
-	account := randomAccount()
+	account := RandomAccount()
 
 	testCases := []struct {
 		name          string
@@ -111,8 +111,9 @@ func TestGetAccountApi(t *testing.T) {
 	}
 }
 
+// TestCreateccountApi tests the CreateAccount API handler
 func TestCreateccountApi(t *testing.T) {
-	account := randomAccount()
+	account := RandomAccount()
 
 	testCases := []struct {
 		name          string
@@ -210,11 +211,12 @@ func TestCreateccountApi(t *testing.T) {
 	}
 }
 
+// TestListccountApi tests the ListAccount API handler
 func TestListccountApi(t *testing.T) {
 	// create 10 random accounts
 	var accounts []db.Account
 	for i := 0; i < 5; i++ {
-		accounts = append(accounts, randomAccount())
+		accounts = append(accounts, RandomAccount())
 	}
 
 	testCases := []struct {
@@ -311,53 +313,9 @@ func TestListccountApi(t *testing.T) {
 	}
 }
 
-func randomAccount() db.Account {
-	return db.Account{
-		ID:       util.RandomInt(1, 1000),
-		Owner:    util.RandomOwner(),
-		Balance:  util.RandomMoney(),
-		Currency: util.RandomCurrency(),
-	}
-}
-
-func requireBodyMatchAccount(t *testing.T, body *bytes.Buffer, account db.Account) {
-	data, err := io.ReadAll(body)
-	require.NoError(t, err)
-
-	var response struct {
-		Data       db.Account `json:"data"`
-		Message    string     `json:"message"`
-		StatusCode int        `json:"statusCode"`
-	}
-
-	err = json.Unmarshal(data, &response)
-	require.NoError(t, err)
-
-	require.Equal(t, account, response.Data)
-}
-
-func requireBodyMatchAccounts(t *testing.T, body *bytes.Buffer) {
-	data, err := io.ReadAll(body)
-	require.NoError(t, err)
-
-	var response struct {
-		Data       req.ListAccountResponse `json:"data"`
-		Message    string                  `json:"message"`
-		StatusCode int                     `json:"statusCode"`
-	}
-
-	err = json.Unmarshal(data, &response)
-	require.NoError(t, err)
-	require.Len(t, response.Data.Accounts, 5)
-	require.Equal(t, response.Data.Length, 5)
-
-	for _, account := range response.Data.Accounts {
-		require.NotEmpty(t, account)
-	}
-}
-
+// TestDeleteAccountApi tests the DeleteAccount API handler
 func TestDeleteAccountApi(t *testing.T) {
-	account := randomAccount()
+	account := RandomAccount()
 
 	testCases := []struct {
 		name          string
@@ -449,5 +407,43 @@ func TestDeleteAccountApi(t *testing.T) {
 			server.Router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
 		})
+	}
+}
+
+// requireBodyMatchAccount checks if the response body matches the account
+func requireBodyMatchAccount(t *testing.T, body *bytes.Buffer, account db.Account) {
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+
+	var response struct {
+		Data       db.Account `json:"data"`
+		Message    string     `json:"message"`
+		StatusCode int        `json:"statusCode"`
+	}
+
+	err = json.Unmarshal(data, &response)
+	require.NoError(t, err)
+
+	require.Equal(t, account, response.Data)
+}
+
+// requireBodyMatchAccounts checks if the response body matches accounts
+func requireBodyMatchAccounts(t *testing.T, body *bytes.Buffer) {
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+
+	var response struct {
+		Data       req.ListAccountResponse `json:"data"`
+		Message    string                  `json:"message"`
+		StatusCode int                     `json:"statusCode"`
+	}
+
+	err = json.Unmarshal(data, &response)
+	require.NoError(t, err)
+	require.Len(t, response.Data.Accounts, 5)
+	require.Equal(t, response.Data.Length, 5)
+
+	for _, account := range response.Data.Accounts {
+		require.NotEmpty(t, account)
 	}
 }

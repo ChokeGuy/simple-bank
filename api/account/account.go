@@ -8,6 +8,7 @@ import (
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
 	sv "github.com/ChokeGuy/simple-bank/server"
+	"github.com/ChokeGuy/simple-bank/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,15 @@ type AccountHandler struct {
 
 func NewAccountHandler(server *sv.Server) *AccountHandler {
 	return &AccountHandler{Server: server}
+}
+
+func RandomAccount() db.Account {
+	return db.Account{
+		ID:       util.RandomInt(1, 1000),
+		Owner:    util.RandomOwner(),
+		Balance:  util.RandomMoney(),
+		Currency: util.RandomCurrency(),
+	}
 }
 
 func (h *AccountHandler) MapRoutes() {
