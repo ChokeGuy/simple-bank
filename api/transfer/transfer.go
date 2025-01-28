@@ -1,1 +1,93 @@
 package transfer
+
+import (
+	"database/sql"
+	"fmt"
+	"net/http"
+
+	dto "github.com/ChokeGuy/simple-bank/api/transfer/dto"
+	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
+	sv "github.com/ChokeGuy/simple-bank/server"
+	"github.com/gin-gonic/gin"
+)
+
+type TransferHandler struct {
+	Server *sv.Server
+}
+
+func NewTransferHandler(server *sv.Server) *TransferHandler {
+	return &TransferHandler{Server: server}
+}
+
+func (h *TransferHandler) MapRoutes() {
+	router := h.Server.Router
+
+	router.POST("/transfer", h.createTransfer)
+}
+
+func (h *TransferHandler) createTransfer(ctx *gin.Context) {
+	var req dto.TransferRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	if err := h.validTx(ctx, req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	arg := db.TransferTxParams{
+		FromAccountID: req.FromAccountID,
+		ToAccountID:   req.ToAccountID,
+		Amount:        req.Amount,
+	}
+
+	result, err := h.Server.Store.TransferTx(ctx, arg)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer created successfully"))
+}
+
+func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, error) {
+	account, err := h.Server.Store.GetAccount(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return db.Account{}, fmt.Errorf("account with id %d not found", id)
+		}
+		return db.Account{}, err
+	}
+	return account, nil
+}
+
+func (h *TransferHandler) validTx(ctx *gin.Context, req dto.TransferRequest) error {
+	// Validate "From" account
+	fromAccount, err := h.getValidAccount(ctx, req.FromAccountID)
+	if err != nil {
+		return err
+	}
+
+	// Validate "To" account
+	toAccount, err := h.getValidAccount(ctx, req.ToAccountID)
+	if err != nil {
+		return err
+	}
+
+	// Check for currency mismatch
+	if fromAccount.Currency != req.Currency || toAccount.Currency != req.Currency {
+		return fmt.Errorf("account currency mismatch")
+	}
+
+	// Check for sufficient balance
+	if fromAccount.Balance < req.Amount {
+		return fmt.Errorf("insufficient account balance")
+	}
+
+	return nil
+}

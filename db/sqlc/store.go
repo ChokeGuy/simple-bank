@@ -48,17 +48,17 @@ func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) erro
 }
 
 type TransferTxParams struct {
-	FromAccountID int64 `json:"from_account_id"`
-	ToAccountID   int64 `json:"to_account_id"`
+	FromAccountID int64 `json:"fromAccountId"`
+	ToAccountID   int64 `json:"toAccountId"`
 	Amount        int64 `json:"amount"`
 }
 
 type TransferTxResult struct {
 	Transfer    Transfer `json:"transfer"`
-	FromAccount Account  `json:"from_account"`
-	ToAccount   Account  `json:"to_account"`
-	FromEntry   Entry    `json:"from_entry"`
-	ToEntry     Entry    `json:"to_entry"`
+	FromAccount Account  `json:"fromAccount"`
+	ToAccount   Account  `json:"toAccount"`
+	FromEntry   Entry    `json:"fromEntry"`
+	ToEntry     Entry    `json:"toEntry"`
 }
 
 // TransferTxParams contains the input parameters of the transfer transaction
@@ -93,10 +93,15 @@ func (store *SQLStore) TransferTx(ctx context.Context, arg TransferTxParams) (Tr
 		}
 
 		if arg.FromAccountID < arg.ToAccountID {
-			result.FromAccount, result.ToAccount, _ = addMoney(ctx, q, arg.FromAccountID, arg.ToAccountID, -arg.Amount, arg.Amount)
+			result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.FromAccountID, arg.ToAccountID, -arg.Amount, arg.Amount)
 		} else {
-			result.ToAccount, result.FromAccount, _ = addMoney(ctx, q, arg.ToAccountID, arg.FromAccountID, arg.Amount, -arg.Amount)
+			result.ToAccount, result.FromAccount, err = addMoney(ctx, q, arg.ToAccountID, arg.FromAccountID, arg.Amount, -arg.Amount)
 		}
+
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 
