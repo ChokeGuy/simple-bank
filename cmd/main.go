@@ -7,6 +7,7 @@ import (
 
 	"github.com/ChokeGuy/simple-bank/api/account"
 	"github.com/ChokeGuy/simple-bank/api/transfer"
+	"github.com/ChokeGuy/simple-bank/api/user"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/server"
@@ -38,6 +39,9 @@ func main() {
 
 	tranferHandler := transfer.NewTransferHandler(server)
 	tranferHandler.MapRoutes()
+
+	userHandler := user.NewUserHandler(server)
+	userHandler.MapRoutes()
 
 	err = server.Start(cf.ServerAddress)
 	if err != nil {

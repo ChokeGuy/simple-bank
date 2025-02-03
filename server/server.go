@@ -21,6 +21,7 @@ func NewServer(store db.Store) *Server {
 
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterValidation("currency", validations.ValidCurrency)
+		v.RegisterValidation("password", validations.ValidPassword)
 	}
 
 	server.Router = router

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 	"time"
@@ -29,6 +30,34 @@ func RandomString(n int) string {
 	return sb.String()
 }
 
+func RandomPassword() string {
+	const (
+		upperLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		lowerLetters = "abcdefghijklmnopqrstuvwxyz"
+		numbers      = "0123456789"
+		specialChars = "!@#~$%^&*()_+|<>?:{}"
+		allChars     = upperLetters + lowerLetters + numbers + specialChars
+	)
+
+	rand.Seed(time.Now().UnixNano())
+
+	password := make([]byte, 6)
+	password[0] = upperLetters[rand.Intn(len(upperLetters))]
+	password[1] = lowerLetters[rand.Intn(len(lowerLetters))]
+	password[2] = numbers[rand.Intn(len(numbers))]
+	password[3] = specialChars[rand.Intn(len(specialChars))]
+	for i := 4; i < 6; i++ {
+		password[i] = allChars[rand.Intn(len(allChars))]
+	}
+
+	// Shuffle the password to ensure randomness
+	rand.Shuffle(len(password), func(i, j int) {
+		password[i], password[j] = password[j], password[i]
+	})
+
+	return string(password)
+}
+
 func RandomMoney() int64 {
 	return RandomInt(0, 1000)
 }
@@ -41,4 +70,8 @@ func RandomCurrency() string {
 
 func RandomOwner() string {
 	return RandomString(6)
+}
+
+func RandomEmail() string {
+	return fmt.Sprintf("%s@gmail.com", RandomString(6))
 }

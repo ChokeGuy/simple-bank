@@ -24,6 +24,9 @@ func (h *TransferHandler) MapRoutes() {
 	router := h.Server.Router
 
 	router.POST("/transfer", h.createTransfer)
+	router.GET("/transfers", h.getTransfers)
+	router.GET("/transfers/from", h.getFromAccountTransfers)
+	router.GET("/transfers/to", h.getToAccountTransfers)
 }
 
 func (h *TransferHandler) createTransfer(ctx *gin.Context) {
@@ -55,14 +58,91 @@ func (h *TransferHandler) createTransfer(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer created successfully"))
 }
 
+func (h *TransferHandler) getTransfers(ctx *gin.Context) {
+	var req dto.GetTransferRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	if _, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	if _, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	arg := db.GetTransfersParams{
+		FromAccountID: req.FromAccountID,
+		ToAccountID:   req.ToAccountID,
+	}
+
+	result, err := h.Server.Store.GetTransfers(ctx, arg)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer history retrieved successfully"))
+}
+
+func (h *TransferHandler) getFromAccountTransfers(ctx *gin.Context) {
+	var req dto.GetFromAccountTransferRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	if _, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	result, err := h.Server.Store.GetTransfersByFromAccountId(ctx, req.FromAccountID)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer history retrieved successfully"))
+}
+
+func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
+	var req dto.GetToAccountTransferRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	if _, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	result, err := h.Server.Store.GetTransfersByToAccountId(ctx, req.ToAccountID)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer history retrieved successfully"))
+}
+
 func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, error) {
 	account, err := h.Server.Store.GetAccount(ctx, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return db.Account{}, fmt.Errorf("account with id %d not found", id)
-		}
-		return db.Account{}, err
+	if err == sql.ErrNoRows {
+		return db.Account{}, fmt.Errorf("account with id %d not found", id)
 	}
+
 	return account, nil
 }
 
