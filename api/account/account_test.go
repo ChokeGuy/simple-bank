@@ -94,7 +94,7 @@ func TestGetAccountApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 
@@ -192,7 +192,7 @@ func TestCreateccountApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -297,7 +297,7 @@ func TestListccountApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -394,7 +394,7 @@ func TestDeleteAccountApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()

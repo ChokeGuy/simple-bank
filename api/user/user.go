@@ -15,7 +15,7 @@ import (
 )
 
 type UserHandler struct {
-	Server *sv.Server
+	*sv.Server
 }
 
 func NewUserHandler(server *sv.Server) *UserHandler {
@@ -23,9 +23,11 @@ func NewUserHandler(server *sv.Server) *UserHandler {
 }
 
 func (h *UserHandler) MapRoutes() {
-	router := h.Server.Router
+	router := h.Router
 
 	router.POST("/user", h.createUser)
+	router.POST("/auth/login", h.loginUser)
+	router.POST("/auth/refresh", h.refreshNewToken)
 	router.GET("/user", h.getUserByUserName)
 }
 
@@ -51,7 +53,7 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		HashedPassword: hashedPassword,
 	}
 
-	result, err := h.Server.Store.CreateUser(ctx, arg)
+	result, err := h.Store.CreateUser(ctx, arg)
 
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -66,7 +68,7 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
-	response := dto.CreateUserResponse{
+	response := dto.UserResponse{
 		UserName:          result.Username,
 		FullName:          result.FullName,
 		Email:             result.Email,
@@ -85,7 +87,7 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.Server.Store.GetUserByUserName(ctx, req.UserName)
+	result, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -105,4 +107,86 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User retrieved successfully"))
+}
+
+func (h *UserHandler) loginUser(ctx *gin.Context) {
+	var req dto.LoginUserRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	if err := password.CheckPassword(req.Password, user.HashedPassword); err != nil {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid password"))
+		return
+	}
+
+	accessToken, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	refreshToken, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	response := dto.LoginUserResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User: dto.UserResponse{
+			UserName:          user.Username,
+			FullName:          user.FullName,
+			Email:             user.Email,
+			PasswordChangedAt: user.PasswordChangedAt.String(),
+			CreatedAt:         user.CreatedAt.String(),
+		},
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User logged in successfully"))
+}
+
+func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
+	var req dto.RefreshTokenRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	claims, err := h.TokenMaker.VerifyToken(req.RefreshToken)
+
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid refresh token"))
+		return
+	}
+
+	accessToken, err := h.TokenMaker.CreateToken(claims.UserName, h.Config.AccessTokenDuration)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	response := dto.RefreshTokenResponse{
+		AccessToken: accessToken,
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "Token refreshed successfully"))
 }

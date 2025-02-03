@@ -10,3 +10,12 @@ type CreateUserRequest struct {
 type GetUserByUserNameRequest struct {
 	UserName string `form:"userName" binding:"required,alphanum"`
 }
+
+type LoginUserRequest struct {
+	UserName string `json:"userName" binding:"required,alphanum"`
+	Password string `json:"password" binding:"required,password"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken" binding:"required"`
+}

@@ -1,6 +1,6 @@
 package user
 
-type CreateUserResponse struct {
+type UserResponse struct {
 	UserName          string `json:"userName"`
 	FullName          string `json:"fullName"`
 	Email             string `json:"email"`
@@ -8,4 +8,14 @@ type CreateUserResponse struct {
 	CreatedAt         string `json:"createdAt"`
 }
 
-type GetUserByUserNameResponse = CreateUserResponse
+type GetUserByUserNameResponse = UserResponse
+
+type LoginUserResponse struct {
+	AccessToken  string       `json:"accessToken"`
+	RefreshToken string       `json:"refreshToken"`
+	User         UserResponse `json:"user"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken string `json:"accessToken"`
+}

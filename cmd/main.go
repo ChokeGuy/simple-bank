@@ -10,6 +10,7 @@ import (
 	"github.com/ChokeGuy/simple-bank/api/user"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
+	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	"github.com/ChokeGuy/simple-bank/server"
 	_ "github.com/lib/pq"
 )
@@ -31,7 +32,15 @@ func main() {
 	}
 
 	store := db.NewStore(conn)
-	server := server.NewServer(store)
+	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
+	if err != nil {
+		log.Fatalf("Token maker err: %v", err)
+	}
+	server, err := server.NewServer(store, &cf, tokenMaker)
+
+	if err != nil {
+		log.Fatalf("cannot create server: %v", err)
+	}
 
 	//Routes
 	accountHandler := account.NewAccountHandler(server)
