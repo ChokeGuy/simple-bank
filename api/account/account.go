@@ -9,6 +9,7 @@ import (
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
 	sv "github.com/ChokeGuy/simple-bank/server"
 	"github.com/ChokeGuy/simple-bank/util"
+	"github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,6 +57,14 @@ func (h *AccountHandler) createAccount(ctx *gin.Context) {
 	account, err := h.Server.Store.CreateAccount(ctx, arg)
 
 	if err != nil {
+		if pErr, ok := err.(*pq.Error); ok {
+			switch pErr.Code.Name() {
+			case "foreign_key_violation", "unique_violation":
+				ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, pErr.Message))
+				return
+			}
+		}
+
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
 		return
 	}
