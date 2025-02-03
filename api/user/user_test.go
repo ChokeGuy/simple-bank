@@ -116,7 +116,7 @@ func TestGetUserByUserNameApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 
@@ -245,7 +245,7 @@ func TestCreateUserApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -292,15 +292,15 @@ func requireBodyMatchCreateUser(t *testing.T, body *bytes.Buffer, user db.User) 
 	require.NoError(t, err)
 
 	var response struct {
-		Data       req.CreateUserResponse `json:"data"`
-		Message    string                 `json:"message"`
-		StatusCode int                    `json:"statusCode"`
+		Data       req.UserResponse `json:"data"`
+		Message    string           `json:"message"`
+		StatusCode int              `json:"statusCode"`
 	}
 
 	err = json.Unmarshal(data, &response)
 	require.NoError(t, err)
 
-	require.Equal(t, req.CreateUserResponse{
+	require.Equal(t, req.UserResponse{
 		UserName:          user.Username,
 		FullName:          user.FullName,
 		Email:             user.Email,

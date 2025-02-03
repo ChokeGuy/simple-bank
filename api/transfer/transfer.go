@@ -13,7 +13,7 @@ import (
 )
 
 type TransferHandler struct {
-	Server *sv.Server
+	*sv.Server
 }
 
 func NewTransferHandler(server *sv.Server) *TransferHandler {
@@ -21,7 +21,7 @@ func NewTransferHandler(server *sv.Server) *TransferHandler {
 }
 
 func (h *TransferHandler) MapRoutes() {
-	router := h.Server.Router
+	router := h.Router
 
 	router.POST("/transfer", h.createTransfer)
 	router.GET("/transfers", h.getTransfers)
@@ -48,7 +48,7 @@ func (h *TransferHandler) createTransfer(ctx *gin.Context) {
 		Amount:        req.Amount,
 	}
 
-	result, err := h.Server.Store.TransferTx(ctx, arg)
+	result, err := h.Store.TransferTx(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -81,7 +81,7 @@ func (h *TransferHandler) getTransfers(ctx *gin.Context) {
 		ToAccountID:   req.ToAccountID,
 	}
 
-	result, err := h.Server.Store.GetTransfers(ctx, arg)
+	result, err := h.Store.GetTransfers(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -104,7 +104,7 @@ func (h *TransferHandler) getFromAccountTransfers(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.Server.Store.GetTransfersByFromAccountId(ctx, req.FromAccountID)
+	result, err := h.Store.GetTransfersByFromAccountId(ctx, req.FromAccountID)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -127,7 +127,7 @@ func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.Server.Store.GetTransfersByToAccountId(ctx, req.ToAccountID)
+	result, err := h.Store.GetTransfersByToAccountId(ctx, req.ToAccountID)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -138,7 +138,7 @@ func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
 }
 
 func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, error) {
-	account, err := h.Server.Store.GetAccount(ctx, id)
+	account, err := h.Store.GetAccount(ctx, id)
 	if err == sql.ErrNoRows {
 		return db.Account{}, fmt.Errorf("account with id %d not found", id)
 	}

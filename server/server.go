@@ -2,6 +2,8 @@ package server
 
 import (
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/validations"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -10,13 +12,25 @@ import (
 
 // Server serves HTTP requests for our banking service.
 type Server struct {
-	Store  db.Store
-	Router *gin.Engine
+	Config     *pkg.Config
+	Store      db.Store
+	Router     *gin.Engine
+	TokenMaker token.Maker
 }
 
 // NewServer creates a new HTTP server and set up routing.
-func NewServer(store db.Store) *Server {
-	server := &Server{Store: store}
+func NewServer(
+	store db.Store,
+	config *pkg.Config,
+	tokenMaker token.Maker,
+) (*Server, error) {
+
+	server := &Server{
+		Store:      store,
+		TokenMaker: tokenMaker,
+		Config:     config,
+	}
+
 	router := gin.Default()
 
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
@@ -25,7 +39,7 @@ func NewServer(store db.Store) *Server {
 	}
 
 	server.Router = router
-	return server
+	return server, nil
 }
 
 // Start runs the HTTP server on a specific address.

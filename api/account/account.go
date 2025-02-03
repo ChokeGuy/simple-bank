@@ -15,7 +15,7 @@ import (
 )
 
 type AccountHandler struct {
-	Server *sv.Server
+	*sv.Server
 }
 
 func NewAccountHandler(server *sv.Server) *AccountHandler {
@@ -32,7 +32,7 @@ func RandomAccount() db.Account {
 }
 
 func (h *AccountHandler) MapRoutes() {
-	router := h.Server.Router
+	router := h.Router
 
 	router.POST("/account", h.createAccount)
 	router.GET("/account/:id", h.getAccount)
@@ -54,7 +54,7 @@ func (h *AccountHandler) createAccount(ctx *gin.Context) {
 		Currency: req.Currency,
 	}
 
-	account, err := h.Server.Store.CreateAccount(ctx, arg)
+	account, err := h.Store.CreateAccount(ctx, arg)
 
 	if err != nil {
 		if pErr, ok := err.(*pq.Error); ok {
@@ -80,7 +80,7 @@ func (h *AccountHandler) getAccount(ctx *gin.Context) {
 		return
 	}
 
-	account, err := h.Server.Store.GetAccount(ctx, req.ID)
+	account, err := h.Store.GetAccount(ctx, req.ID)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -108,7 +108,7 @@ func (h *AccountHandler) listAccounts(ctx *gin.Context) {
 		Offset: (req.Page - 1) * req.Size,
 	}
 
-	accounts, err := h.Server.Store.ListAccounts(ctx, arg)
+	accounts, err := h.Store.ListAccounts(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -131,13 +131,13 @@ func (h *AccountHandler) deleteAccount(ctx *gin.Context) {
 		return
 	}
 
-	_, err = h.Server.Store.GetAccount(ctx, req.ID)
+	_, err = h.Store.GetAccount(ctx, req.ID)
 	if err == sql.ErrNoRows {
 		ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Account not found"))
 		return
 	}
 
-	err = h.Server.Store.DeleteAccount(ctx, req.ID)
+	err = h.Store.DeleteAccount(ctx, req.ID)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))

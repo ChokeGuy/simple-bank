@@ -266,7 +266,7 @@ func TestCreateTransfer(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -454,7 +454,7 @@ func TestGetTransfers(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -591,7 +591,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -727,7 +727,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server := server.NewServer(store)
+			server, _ := server.NewServer(store, nil, nil)
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
 			recorder := httptest.NewRecorder()

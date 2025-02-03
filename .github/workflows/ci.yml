@@ -47,6 +47,9 @@ jobs:
           echo "POSTGRES_DB=${{secrets.POSTGRES_DB}}" >> .env
           echo "SERVER_ADDRESS=${{secrets.SERVER_ADDRESS}}" >> .env
           echo "DB_DRIVER=${{secrets.DB_DRIVER}}" >> .env
+          echo "SYMMETRIC_KEY=${{secrets.SYMMETRIC_KEY}}" >> .env
+          echo "ACCESS_TOKEN_DURATION=${{secrets.ACCESS_TOKEN_DURATION}}" >> .env
+          echo "REFRESH_TOKEN_DURATION=${{secrets.REFRESH_TOKEN_DURATION}}" >> .env
       
       - name: Install golang-migrate
         run: |
