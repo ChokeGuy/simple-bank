@@ -18,6 +18,9 @@ type Config struct {
 
 // LoadConfig loads the configuration from the file
 func LoadConfig(path string) (config Config, err error) {
+	if path == "" {
+		path = "." // Default to current directory if no path is provided
+	}
 	viper.AddConfigPath(path)
 	viper.SetConfigName(".env") // Set the config name to ".env" without the extension
 	viper.SetConfigType("env")

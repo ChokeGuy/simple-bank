@@ -7,6 +7,8 @@ import (
 	dto "github.com/ChokeGuy/simple-bank/api/account/dto"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
+	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server"
 	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/lib/pq"
@@ -22,10 +24,10 @@ func NewAccountHandler(server *sv.Server) *AccountHandler {
 	return &AccountHandler{Server: server}
 }
 
-func RandomAccount() db.Account {
+func RandomAccount(owner string) db.Account {
 	return db.Account{
 		ID:       util.RandomInt(1, 1000),
-		Owner:    util.RandomOwner(),
+		Owner:    owner,
 		Balance:  util.RandomMoney(),
 		Currency: util.RandomCurrency(),
 	}
@@ -34,10 +36,12 @@ func RandomAccount() db.Account {
 func (h *AccountHandler) MapRoutes() {
 	router := h.Router
 
-	router.POST("/account", h.createAccount)
-	router.GET("/account/:id", h.getAccount)
-	router.GET("/accounts", h.listAccounts)
-	router.DELETE("/account/:id", h.deleteAccount)
+	authRoutes := router.Group("/").Use(auth.AuthMiddleWare(h.TokenMaker))
+
+	authRoutes.POST("/account", h.createAccount)
+	authRoutes.GET("/account/:id", h.getAccount)
+	authRoutes.GET("/accounts", h.listAccounts)
+	authRoutes.DELETE("/account/:id", h.deleteAccount)
 }
 
 func (h *AccountHandler) createAccount(ctx *gin.Context) {
@@ -48,8 +52,10 @@ func (h *AccountHandler) createAccount(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
 	arg := db.CreateAccountParams{
-		Owner:    req.Owner,
+		Owner:    authPayload.UserName,
 		Balance:  0,
 		Currency: req.Currency,
 	}
@@ -60,7 +66,7 @@ func (h *AccountHandler) createAccount(ctx *gin.Context) {
 		if pErr, ok := err.(*pq.Error); ok {
 			switch pErr.Code.Name() {
 			case "foreign_key_violation", "unique_violation":
-				ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, pErr.Message))
+				ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, pErr.Message))
 				return
 			}
 		}
@@ -91,6 +97,12 @@ func (h *AccountHandler) getAccount(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
 		return
 	}
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
+	if account.Owner != authPayload.UserName {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Account does not belong to the authenticated user"))
+		return
+	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(account, "Account retrieved successfully"))
 }
@@ -103,7 +115,10 @@ func (h *AccountHandler) listAccounts(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
 	arg := db.ListAccountsParams{
+		Owner:  authPayload.UserName,
 		Limit:  req.Size,
 		Offset: (req.Page - 1) * req.Size,
 	}
@@ -131,9 +146,19 @@ func (h *AccountHandler) deleteAccount(ctx *gin.Context) {
 		return
 	}
 
-	_, err = h.Store.GetAccount(ctx, req.ID)
-	if err == sql.ErrNoRows {
-		ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Account not found"))
+	account, err := h.Store.GetAccount(ctx, req.ID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Account not found"))
+			return
+		}
+	}
+
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
+	if account.Owner != authPayload.UserName {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Account does not belong to the authenticated user"))
 		return
 	}
 

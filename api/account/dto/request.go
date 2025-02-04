@@ -1,7 +1,6 @@
 package account
 
 type CreateAccountRequest struct {
-	Owner    string `json:"owner" binding:"required"`
 	Currency string `json:"currency" binding:"required,currency"`
 }
 
@@ -10,8 +9,9 @@ type GetAccountRequest struct {
 }
 
 type ListAccountRequest struct {
-	Page int32 `form:"page,default=1" binding:"min=1"`
-	Size int32 `form:"size" binding:"required,min=5,max=10"`
+	Owner string `form:"owner"`
+	Page  int32  `form:"page,default=1" binding:"min=1"`
+	Size  int32  `form:"size" binding:"required,min=5,max=10"`
 }
 
 type DeleteAccountRequest struct {
