@@ -3,13 +3,16 @@ package user
 import (
 	"database/sql"
 	"net/http"
+	"testing"
 
 	dto "github.com/ChokeGuy/simple-bank/api/user/dto"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
 	sv "github.com/ChokeGuy/simple-bank/server"
-	"github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/ChokeGuy/simple-bank/util"
+	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/lib/pq"
+	"github.com/stretchr/testify/require"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +34,20 @@ func (h *UserHandler) MapRoutes() {
 	router.GET("/user", h.getUserByUserName)
 }
 
+// Create radom user
+func RandomUser(t *testing.T) (db.User, string) {
+	password := util.RandomPassword()
+	hashedPassword, err := pw.HashPassword(password)
+	require.NoError(t, err)
+
+	return db.User{
+		Username:       util.RandomOwner(),
+		FullName:       util.RandomOwner(),
+		Email:          util.RandomEmail(),
+		HashedPassword: hashedPassword,
+	}, password
+}
+
 func (h *UserHandler) createUser(ctx *gin.Context) {
 	var req dto.CreateUserRequest
 
@@ -39,7 +56,7 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := password.HashPassword(req.Password)
+	hashedPassword, err := pw.HashPassword(req.Password)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -128,7 +145,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	if err := password.CheckPassword(req.Password, user.HashedPassword); err != nil {
+	if err := pw.CheckPassword(req.Password, user.HashedPassword); err != nil {
 		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid password"))
 		return
 	}

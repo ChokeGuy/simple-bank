@@ -1,13 +1,18 @@
 package server
 
 import (
+	"testing"
+
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
+
 	"github.com/ChokeGuy/simple-bank/pkg/token"
+	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	"github.com/ChokeGuy/simple-bank/validations"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"github.com/stretchr/testify/require"
 )
 
 // Server serves HTTP requests for our banking service.
@@ -40,6 +45,17 @@ func NewServer(
 
 	server.Router = router
 	return server, nil
+}
+
+// NewTestServer creates a new HTTP server for testing.
+func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config) *Server {
+	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
+	require.NoError(t, err)
+
+	server, err := NewServer(store, cf, tokenMaker)
+	require.NoError(t, err)
+
+	return server
 }
 
 // Start runs the HTTP server on a specific address.

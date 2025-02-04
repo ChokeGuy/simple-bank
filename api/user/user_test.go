@@ -13,26 +13,11 @@ import (
 	req "github.com/ChokeGuy/simple-bank/api/user/dto"
 	mockdb "github.com/ChokeGuy/simple-bank/db/mock"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/server"
-	"github.com/ChokeGuy/simple-bank/util"
-	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
-
-// Create radom user
-func RandomUser(t *testing.T) (db.User, string) {
-	password := util.RandomPassword()
-	hashedPassword, err := pw.HashPassword(password)
-	require.NoError(t, err)
-
-	return db.User{
-		Username:       util.RandomOwner(),
-		FullName:       util.RandomOwner(),
-		Email:          util.RandomEmail(),
-		HashedPassword: hashedPassword,
-	}, password
-}
 
 // TestGetUserByUserNameApi tests the GetUserByUserName API handler
 func TestGetUserByUserNameApi(t *testing.T) {
@@ -116,7 +101,11 @@ func TestGetUserByUserNameApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server, _ := server.NewServer(store, nil, nil)
+			cfg, err := pkg.LoadConfig("../../")
+			require.NoError(t, err)
+
+			server := server.NewTestServer(t, store, &cfg)
+
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 
@@ -245,7 +234,10 @@ func TestCreateUserApi(t *testing.T) {
 			tc.buildStubs(store)
 
 			//start new server
-			server, _ := server.NewServer(store, nil, nil)
+			cfg, err := pkg.LoadConfig("../../")
+			require.NoError(t, err)
+
+			server := server.NewTestServer(t, store, &cfg)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()

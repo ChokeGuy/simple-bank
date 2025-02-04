@@ -8,6 +8,8 @@ import (
 	dto "github.com/ChokeGuy/simple-bank/api/transfer/dto"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
+	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server"
 	"github.com/gin-gonic/gin"
 )
@@ -23,10 +25,12 @@ func NewTransferHandler(server *sv.Server) *TransferHandler {
 func (h *TransferHandler) MapRoutes() {
 	router := h.Router
 
-	router.POST("/transfer", h.createTransfer)
-	router.GET("/transfers", h.getTransfers)
-	router.GET("/transfers/from", h.getFromAccountTransfers)
-	router.GET("/transfers/to", h.getToAccountTransfers)
+	authRoutes := router.Group("/").Use(auth.AuthMiddleWare(h.TokenMaker))
+
+	authRoutes.POST("/transfer", h.createTransfer)
+	authRoutes.GET("/transfers", h.getTransfers)
+	authRoutes.GET("/transfers/from", h.getFromAccountTransfers)
+	authRoutes.GET("/transfers/to", h.getToAccountTransfers)
 }
 
 func (h *TransferHandler) createTransfer(ctx *gin.Context) {
@@ -37,8 +41,10 @@ func (h *TransferHandler) createTransfer(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.validTx(ctx, req); err != nil {
-		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+	statusCode, err := h.validTx(ctx, req)
+
+	if err != nil {
+		ctx.JSON(statusCode, res.ErrorResponse(statusCode, err.Error()))
 		return
 	}
 
@@ -66,13 +72,19 @@ func (h *TransferHandler) getTransfers(ctx *gin.Context) {
 		return
 	}
 
-	if _, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
-		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+	if fromAccount, statusCode, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
+		ctx.JSON(statusCode, res.ErrorResponse(statusCode, err.Error()))
 		return
+	} else {
+		authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+		if fromAccount.Owner != authPayload.UserName {
+			ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "account does not belong to user"))
+			return
+		}
 	}
 
-	if _, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
-		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+	if _, statusCode, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
+		ctx.JSON(statusCode, res.ErrorResponse(statusCode, err.Error()))
 		return
 	}
 
@@ -99,9 +111,15 @@ func (h *TransferHandler) getFromAccountTransfers(ctx *gin.Context) {
 		return
 	}
 
-	if _, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
-		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+	if fromAccount, statusCode, err := h.getValidAccount(ctx, req.FromAccountID); err != nil {
+		ctx.JSON(statusCode, res.ErrorResponse(statusCode, err.Error()))
 		return
+	} else {
+		authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+		if fromAccount.Owner != authPayload.UserName {
+			ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "account does not belong to user"))
+			return
+		}
 	}
 
 	result, err := h.Store.GetTransfersByFromAccountId(ctx, req.FromAccountID)
@@ -122,9 +140,15 @@ func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
 		return
 	}
 
-	if _, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
-		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+	if toAccount, statusCode, err := h.getValidAccount(ctx, req.ToAccountID); err != nil {
+		ctx.JSON(statusCode, res.ErrorResponse(statusCode, err.Error()))
 		return
+	} else {
+		authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+		if toAccount.Owner != authPayload.UserName {
+			ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "account does not belong to user"))
+			return
+		}
 	}
 
 	result, err := h.Store.GetTransfersByToAccountId(ctx, req.ToAccountID)
@@ -137,37 +161,42 @@ func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, res.SuccessResponse(result, "Transfer history retrieved successfully"))
 }
 
-func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, error) {
+func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, int, error) {
 	account, err := h.Store.GetAccount(ctx, id)
 	if err == sql.ErrNoRows {
-		return db.Account{}, fmt.Errorf("account with id %d not found", id)
+		return db.Account{}, http.StatusBadRequest, fmt.Errorf("account with id %d not found", id)
 	}
 
-	return account, nil
+	return account, http.StatusOK, nil
 }
 
-func (h *TransferHandler) validTx(ctx *gin.Context, req dto.TransferRequest) error {
+func (h *TransferHandler) validTx(ctx *gin.Context, req dto.TransferRequest) (int, error) {
 	// Validate "From" account
-	fromAccount, err := h.getValidAccount(ctx, req.FromAccountID)
+	fromAccount, statusCode, err := h.getValidAccount(ctx, req.FromAccountID)
 	if err != nil {
-		return err
+		return statusCode, err
+	}
+
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+	if fromAccount.Owner != authPayload.UserName {
+		return http.StatusUnauthorized, fmt.Errorf("account does not belong to user")
 	}
 
 	// Validate "To" account
-	toAccount, err := h.getValidAccount(ctx, req.ToAccountID)
+	toAccount, statusCode, err := h.getValidAccount(ctx, req.ToAccountID)
 	if err != nil {
-		return err
+		return statusCode, err
 	}
 
 	// Check for currency mismatch
 	if fromAccount.Currency != req.Currency || toAccount.Currency != req.Currency {
-		return fmt.Errorf("account currency mismatch")
+		return http.StatusBadRequest, fmt.Errorf("account currency mismatch")
 	}
 
 	// Check for sufficient balance
 	if fromAccount.Balance < req.Amount {
-		return fmt.Errorf("insufficient account balance")
+		return http.StatusBadRequest, fmt.Errorf("insufficient account balance")
 	}
 
-	return nil
+	return http.StatusOK, nil
 }
