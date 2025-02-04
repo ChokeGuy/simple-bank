@@ -5,7 +5,7 @@ ENV := $(PWD)/.env
 include $(ENV)
 
 postgres:
-	docker run --name postgres-container -p 5432:5432 -e POSTGRES_USER=${POSTGRES_USER} -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} -d postgres:latest
+	docker run --name postgres-container --network bank-network -p 5432:5432 -e POSTGRES_USER=${POSTGRES_USER} -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} -d postgres:latest
 createdb:
 	docker exec -it postgres-container createdb --username=root --owner=root simple-bank
 dropdb:
