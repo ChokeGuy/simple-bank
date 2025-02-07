@@ -9,7 +9,14 @@ jobs:
     name: Build image
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write   # Required for OIDC authentication
+      contents: read    # Allows reading the repo
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
         with:
