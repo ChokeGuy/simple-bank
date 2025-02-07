@@ -17,6 +17,8 @@ COPY db/migrations ./migrations
 COPY .env .
 COPY start.sh .
 
+RUN chmod +x /app/start.sh
+
 RUN apk add --no-cache make postgresql-client
 
 EXPOSE 8080
