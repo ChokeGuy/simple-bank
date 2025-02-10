@@ -226,7 +226,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		},
 	}
 
-	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User logged in successfully"))
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User logged in successfully22"))
 }
 
 func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
