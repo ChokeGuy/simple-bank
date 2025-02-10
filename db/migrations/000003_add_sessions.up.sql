@@ -4,7 +4,7 @@ CREATE TABLE
         "username" varchar NOT NULL,
         "refresh_token" varchar NOT NULL,
         "user_agent" varchar NOT NULL,
-        "client_ip" varchar UNIQUE NOT NULL,
+        "client_ip" varchar NOT NULL,
         "is_blocked" bool NOT NULL DEFAULT FALSE,
         "expires_at" timestamptz NOT NULL,
         "created_at" timestamptz NOT NULL DEFAULT (now ())
