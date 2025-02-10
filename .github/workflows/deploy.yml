@@ -63,7 +63,11 @@ jobs:
       - name: Switch kubectl context
         run: |
           kubectl config use-context arn:aws:eks:us-east-1:058264480744:cluster/simple-bank-2
-          
+        
+      - name: Update deployment file with new image tag
+        run: |
+          sed -i 's|image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:.*|image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:${{ github.sha }}|' eks/deployment.yaml
+      
       - name: Deploy image to Amazon EKS
         run: |
           kubectl apply -f eks/deployment.yaml
@@ -71,4 +75,9 @@ jobs:
           kubectl apply -f eks/issuer.yaml
           kubectl apply -f eks/ingress-controller.yaml
           kubectl apply -f eks/ingress.yaml
+      
+      - name: Restart deployment to force update
+        run: |
+          kubectl rollout restart deployment simple-bank-api-deployment
+
           
