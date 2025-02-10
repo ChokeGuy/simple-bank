@@ -74,10 +74,9 @@ jobs:
           kubectl apply -f eks/service.yaml
           kubectl apply -f eks/issuer.yaml
           kubectl apply -f eks/ingress-controller.yaml
-          kubectl apply -f eks/ingress.yaml
-      
-      - name: Restart deployment to force update
-        run: |
-          kubectl rollout restart deployment simple-bank-api-deployment
+          kubectl apply -f eks/ingress.yaml      
+      # - name: Restart deployment to force update
+      #   run: |
+      #     kubectl rollout restart deployment simple-bank-api-deployment
 
           
