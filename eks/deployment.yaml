@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: simple-bank-api 
-        image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:latest
+        image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:{{GITHUB_SHA}}
         imagePullPolicy: Always
         ports:
         - name: http
