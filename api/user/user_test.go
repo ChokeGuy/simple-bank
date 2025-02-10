@@ -287,6 +287,84 @@ func TestLoginUserApi(t *testing.T) {
 					}, nil)
 
 				store.EXPECT().
+					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+
+				store.EXPECT().
+					CreateSession(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.Session{
+						ID:           uuid.New(),
+						Username:     user.Username,
+						RefreshToken: gomock.Any().String(),
+						UserAgent:    gomock.Any().String(),
+						ClientIp:     gomock.Any().String(),
+						IsBlocked:    false,
+						ExpiresAt:    time.Now().Add(24 * time.Hour),
+					}, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name: "UserAlreadyLoggedIn",
+			body: req.LoginUserRequest{
+				UserName: user.Username,
+				Password: password,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetUserByUserNameRow{
+						Username:       user.Username,
+						FullName:       user.FullName,
+						Email:          user.Email,
+						HashedPassword: user.HashedPassword,
+						CreatedAt:      user.CreatedAt,
+					}, nil)
+
+				store.EXPECT().
+					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetSessionByUserNameRow{
+						ID:        uuid.New(),
+						IsBlocked: false,
+					}, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
+			name: "BlockedSession",
+			body: req.LoginUserRequest{
+				UserName: user.Username,
+				Password: password,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetUserByUserNameRow{
+						Username:       user.Username,
+						FullName:       user.FullName,
+						Email:          user.Email,
+						HashedPassword: user.HashedPassword,
+						CreatedAt:      user.CreatedAt,
+					}, nil)
+
+				store.EXPECT().
+					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetSessionByUserNameRow{
+						ID:        uuid.New(),
+						IsBlocked: true,
+					}, nil)
+
+				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Session{
@@ -368,6 +446,11 @@ func TestLoginUserApi(t *testing.T) {
 						HashedPassword: user.HashedPassword,
 						CreatedAt:      user.CreatedAt,
 					}, nil)
+
+				store.EXPECT().
+					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).

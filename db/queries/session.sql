@@ -26,3 +26,19 @@ FROM
 WHERE
     id = $1
 LIMIT 1;
+
+
+-- name: GetSessionByUserName :one
+SELECT
+    id,
+    username,
+    refresh_token,
+    user_agent,
+    client_ip,
+    is_blocked,
+    expires_at
+FROM
+    sessions
+WHERE
+    username = $1
+LIMIT 1;

@@ -229,6 +229,21 @@ func (mr *MockStoreMockRecorder) GetSessionById(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionById", reflect.TypeOf((*MockStore)(nil).GetSessionById), arg0, arg1)
 }
 
+// GetSessionByUserName mocks base method.
+func (m *MockStore) GetSessionByUserName(arg0 context.Context, arg1 string) (sqlc.GetSessionByUserNameRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSessionByUserName", arg0, arg1)
+	ret0, _ := ret[0].(sqlc.GetSessionByUserNameRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSessionByUserName indicates an expected call of GetSessionByUserName.
+func (mr *MockStoreMockRecorder) GetSessionByUserName(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionByUserName", reflect.TypeOf((*MockStore)(nil).GetSessionByUserName), arg0, arg1)
+}
+
 // GetTransfer mocks base method.
 func (m *MockStore) GetTransfer(arg0 context.Context, arg1 int64) (sqlc.Transfer, error) {
 	m.ctrl.T.Helper()

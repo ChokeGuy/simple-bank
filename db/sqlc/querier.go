@@ -24,6 +24,7 @@ type Querier interface {
 	GetEntry(ctx context.Context, id int64) (Entry, error)
 	GetEntryByAccountId(ctx context.Context, accountID int64) (Entry, error)
 	GetSessionById(ctx context.Context, id uuid.UUID) (GetSessionByIdRow, error)
+	GetSessionByUserName(ctx context.Context, username string) (GetSessionByUserNameRow, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
 	GetTransfers(ctx context.Context, arg GetTransfersParams) ([]GetTransfersRow, error)
 	GetTransfersByFromAccountId(ctx context.Context, fromAccountID int64) ([]GetTransfersByFromAccountIdRow, error)

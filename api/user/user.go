@@ -180,6 +180,11 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	if session, _ := h.Store.GetSessionByUserName(ctx, req.UserName); session.ID != uuid.Nil && !session.IsBlocked {
+		ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, "User already logined"))
+		return
+	}
+
 	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
 
 	if err != nil {
