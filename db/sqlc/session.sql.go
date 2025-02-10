@@ -101,3 +101,44 @@ func (q *Queries) GetSessionById(ctx context.Context, id uuid.UUID) (GetSessionB
 	)
 	return i, err
 }
+
+const getSessionByUserName = `-- name: GetSessionByUserName :one
+SELECT
+    id,
+    username,
+    refresh_token,
+    user_agent,
+    client_ip,
+    is_blocked,
+    expires_at
+FROM
+    sessions
+WHERE
+    username = $1
+LIMIT 1
+`
+
+type GetSessionByUserNameRow struct {
+	ID           uuid.UUID `json:"id"`
+	Username     string    `json:"username"`
+	RefreshToken string    `json:"refresh_token"`
+	UserAgent    string    `json:"user_agent"`
+	ClientIp     string    `json:"client_ip"`
+	IsBlocked    bool      `json:"is_blocked"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+func (q *Queries) GetSessionByUserName(ctx context.Context, username string) (GetSessionByUserNameRow, error) {
+	row := q.db.QueryRowContext(ctx, getSessionByUserName, username)
+	var i GetSessionByUserNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.RefreshToken,
+		&i.UserAgent,
+		&i.ClientIp,
+		&i.IsBlocked,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
