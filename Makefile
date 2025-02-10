@@ -28,5 +28,8 @@ migratedown1:
 	migrate -path db/migrations -database "$(POSTGRES_URL)" -verbose down 1
 mock:
 	mockgen -package mockdb -destination db/mock/store.go github.com/ChokeGuy/simple-bank/db/sqlc Store
-
-.PHONY: postgres createdb dropdb sqlc migrateup migratedown migrateup1 migratedown1 test server mock migratecreate
+db_docs:
+	dbdocs build doc/db.dbml
+db_schema:
+	dbml2sql --postgres -o doc/schema.sql doc/db.dbml
+.PHONY: postgres createdb dropdb sqlc db_docs db_schema migratecreate migrateup migratedown migrateup1 migratedown1 test server mock
