@@ -13,6 +13,8 @@ spec:
     metadata:
       labels:
         app: simple-bank-api
+      annotations:
+        rollme: "{{ now | date '20060102150405' }}"
     spec:
       containers:
       - name: simple-bank-api 

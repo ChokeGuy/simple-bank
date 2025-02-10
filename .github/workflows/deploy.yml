@@ -60,7 +60,7 @@ jobs:
       - name: Update kubectl configuration
         run: aws eks --region us-east-1 update-kubeconfig --name simple-bank-2
 
-      - name: Configure kubectl
+      - name: Switch kubectl context
         run: |
           kubectl config use-context arn:aws:eks:us-east-1:058264480744:cluster/simple-bank-2
           
