@@ -1,5 +1,11 @@
 package user
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type UserResponse struct {
 	UserName          string `json:"userName"`
 	FullName          string `json:"fullName"`
@@ -11,11 +17,15 @@ type UserResponse struct {
 type GetUserByUserNameResponse = UserResponse
 
 type LoginUserResponse struct {
-	AccessToken  string       `json:"accessToken"`
-	RefreshToken string       `json:"refreshToken"`
-	User         UserResponse `json:"user"`
+	SessionID             uuid.UUID    `json:"sessionId"`
+	AccessToken           string       `json:"accessToken"`
+	AccessTokenExpiresAt  time.Time    `json:"accessTokenExpiresAt"`
+	RefreshToken          string       `json:"refreshToken"`
+	RefreshTokenExpiresAt time.Time    `json:"refreshTokenExpiresAt"`
+	User                  UserResponse `json:"user"`
 }
 
 type RefreshTokenResponse struct {
-	AccessToken string `json:"accessToken"`
+	AccessToken          string    `json:"accessToken"`
+	AccessTokenExpiresAt time.Time `json:"accessTokenExpiresAt"`
 }

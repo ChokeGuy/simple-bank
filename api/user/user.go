@@ -4,13 +4,17 @@ import (
 	"database/sql"
 	"net/http"
 	"testing"
+	"time"
 
 	dto "github.com/ChokeGuy/simple-bank/api/user/dto"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
+	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	sv "github.com/ChokeGuy/simple-bank/server"
 	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +34,7 @@ func (h *UserHandler) MapRoutes() {
 
 	router.POST("/user", h.createUser)
 	router.POST("/auth/login", h.loginUser)
-	router.POST("/auth/refresh", h.refreshNewToken)
+	router.POST("/auth/refresh-token", h.refreshNewToken)
 	router.GET("/user", h.getUserByUserName)
 }
 
@@ -46,6 +50,32 @@ func RandomUser(t *testing.T) (db.User, string) {
 		Email:          util.RandomEmail(),
 		HashedPassword: hashedPassword,
 	}, password
+}
+
+func RandomToken(t *testing.T, userName string) string {
+	cfg, err := pkg.LoadConfig("../..")
+	require.NoError(t, err)
+
+	paseto, err := paseto.NewPasetoMaker(cfg.SymetricKey)
+	require.NoError(t, err)
+
+	token, _, err := paseto.CreateToken(userName, time.Hour)
+	require.NoError(t, err)
+
+	return token
+}
+
+func RandomSession(t *testing.T, userName string) (db.Session, string) {
+	token := RandomToken(t, userName)
+	return db.Session{
+		ID:           uuid.New(),
+		Username:     userName,
+		RefreshToken: token,
+		UserAgent:    util.RandomString(6),
+		ClientIp:     util.RandomString(6),
+		IsBlocked:    false,
+		ExpiresAt:    time.Now().Add(time.Hour),
+	}, token
 }
 
 func (h *UserHandler) createUser(ctx *gin.Context) {
@@ -150,14 +180,31 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
 		return
 	}
 
-	refreshToken, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	arg := db.CreateSessionParams{
+		ID:           uuid.MustParse(rTkPayload.ID),
+		Username:     user.Username,
+		RefreshToken: refreshToken,
+		UserAgent:    ctx.Request.UserAgent(),
+		ClientIp:     ctx.ClientIP(),
+		IsBlocked:    false,
+		ExpiresAt:    rTkPayload.ExpiresAt.Time,
+	}
+
+	session, err := h.Store.CreateSession(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -165,8 +212,11 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	}
 
 	response := dto.LoginUserResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		SessionID:             session.ID,
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  aTkPayload.ExpiresAt.Time,
+		RefreshToken:          refreshToken,
+		RefreshTokenExpiresAt: rTkPayload.ExpiresAt.Time,
 		User: dto.UserResponse{
 			UserName:          user.Username,
 			FullName:          user.FullName,
@@ -194,7 +244,38 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, err := h.TokenMaker.CreateToken(claims.UserName, h.Config.AccessTokenDuration)
+	session, err := h.Store.GetSessionById(ctx, uuid.MustParse(claims.ID))
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Session not found"))
+			return
+		}
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid session"))
+		return
+	}
+
+	if session.IsBlocked {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Session is blocked"))
+		return
+	}
+
+	if session.Username != claims.UserName {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Incorrect session user"))
+		return
+	}
+
+	if session.RefreshToken != req.RefreshToken {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Mismatched session token"))
+		return
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Session expired"))
+		return
+	}
+
+	accessToken, payload, err := h.TokenMaker.CreateToken(claims.UserName, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -202,7 +283,8 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 	}
 
 	response := dto.RefreshTokenResponse{
-		AccessToken: accessToken,
+		AccessToken:          accessToken,
+		AccessTokenExpiresAt: payload.ExpiresAt.Time,
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "Token refreshed successfully"))
