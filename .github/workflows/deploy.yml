@@ -85,9 +85,10 @@ jobs:
           chmod 400 private_key.pem
 
           ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
-            echo "REGISTRY=$REGISTRY"
-            echo "REPOSITORY=$REPOSITORY"
-            echo "IMAGE_TAG=$IMAGE_TAG"
+            export REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+            export REPOSITORY="simple-bank"
+            export IMAGE_TAG="${{ github.sha }}"
+            
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY
             docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
             docker stop simple-bank || true
