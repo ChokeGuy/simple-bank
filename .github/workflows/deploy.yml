@@ -93,7 +93,7 @@ jobs:
             docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
             docker stop simple-bank || true
             docker rm simple-bank || true
-            docker run -d --name simple-bank -p 80:8080 $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            docker run -d --name simple-bank -p 8080:8080 $REGISTRY/$REPOSITORY:$IMAGE_TAG
           EOF
 
           rm private_key.pem
