@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net/http"
 
 	"github.com/ChokeGuy/simple-bank/api/account"
 	"github.com/ChokeGuy/simple-bank/api/transfer"
@@ -11,11 +12,16 @@ import (
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	sv "github.com/ChokeGuy/simple-bank/server"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
 
 // setUpRouter set up all routes
 func setUpRouter(server *sv.Server) {
+	server.Router.GET("", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, "Welcome to Simple Bank")
+	})
+
 	userHandler := user.NewUserHandler(server)
 	userHandler.MapRoutes()
 
