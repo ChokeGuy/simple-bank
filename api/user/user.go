@@ -180,9 +180,24 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	if session, _ := h.Store.GetSessionByUserName(ctx, req.UserName); session.ID != uuid.Nil && !session.IsBlocked {
-		ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, "User already logined"))
-		return
+	if session, _ := h.Store.GetSessionByUserName(ctx, req.UserName); session.ID != uuid.Nil {
+		// Check if session is expired
+		if time.Now().After(session.ExpiresAt) {
+			// Delete expired session
+			err := h.Store.DeleteSession(ctx, session.ID)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, "Failed to delete expired session"))
+				return
+			}
+		} else if session.IsBlocked {
+			// Session exists and is not blocked
+			ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, "Session is blocked"))
+			return
+		} else {
+			// Session exists and is not blocked
+			ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, "User session already exists"))
+			return
+		}
 	}
 
 	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
