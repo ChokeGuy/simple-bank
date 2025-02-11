@@ -17,11 +17,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'v1.31.0' # default is latest stable
-        id: install
+      # - name: Install kubectl
+      #   uses: azure/setup-kubectl@v4
+      #   with:
+      #     version: 'v1.31.0' # default is latest stable
+      #   id: install
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
@@ -57,23 +57,39 @@ jobs:
           docker push -a $REGISTRY/$REPOSITORY
     
 
-      - name: Update kubectl configuration
-        run: aws eks --region us-east-1 update-kubeconfig --name simple-bank-2
+      # - name: Update kubectl configuration
+      #   run: aws eks --region us-east-1 update-kubeconfig --name simple-bank-2
 
-      - name: Switch kubectl context
-        run: |
-          kubectl config use-context arn:aws:eks:us-east-1:058264480744:cluster/simple-bank-2
-        
-      - name: Update deployment file with new image tag
-        run: |
-          sed -i 's|image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:.*|image: 058264480744.dkr.ecr.us-east-1.amazonaws.com/simple-bank:${{ github.sha }}|' eks/deployment.yaml
-      
-      - name: Deploy image to Amazon EKS
-        run: |
-          kubectl apply -f eks/deployment.yaml
-          kubectl apply -f eks/service.yaml
-          kubectl apply -f eks/issuer.yaml
-          kubectl apply -f eks/ingress-controller.yaml
-          kubectl apply -f eks/ingress.yaml
-
+      # - name: Configure kubectl
+      #   run: |
+      #     kubectl config use-context arn:aws:eks:us-east-1:058264480744:cluster/simple-bank-2
           
+      # - name: Deploy image to Amazon EKS
+      #   run: |
+      #     kubectl apply -f eks/deployment.yaml
+      #     kubectl apply -f eks/service.yaml
+      #     kubectl apply -f eks/issuer.yaml
+      #     kubectl apply -f eks/ingress-controller.yaml
+      #     kubectl apply -f eks/ingress.yaml
+      
+      - name: Deploy image to to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ubuntu
+          KEY_SECRET: ${{ secrets.EC2_SSH_KEY }}
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: simple-bank
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "$KEY_SECRET" > private_key.pem
+          chmod 400 private_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY
+            docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            docker stop simple-bank || true
+            docker rm simple-bank || true
+            docker run -d --name simple-bank -p 80:80 $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          EOF
+
+          rm private_key.pem
