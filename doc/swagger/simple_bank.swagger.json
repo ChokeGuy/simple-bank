@@ -23,6 +23,8 @@
   "paths": {
     "/accounts": {
       "get": {
+        "summary": "Get list account",
+        "description": "API for get list account of the user",
         "operationId": "SimpleBank_GetListAccount",
         "responses": {
           "200": {
@@ -67,6 +69,8 @@
     },
     "/auth/login": {
       "post": {
+        "summary": "Login user",
+        "description": "API for login user",
         "operationId": "SimpleBank_LoginUser",
         "responses": {
           "200": {
@@ -99,6 +103,8 @@
     },
     "/user": {
       "post": {
+        "summary": "Create new user",
+        "description": "API for create a new user",
         "operationId": "SimpleBank_CreateUser",
         "responses": {
           "200": {

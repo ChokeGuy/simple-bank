@@ -28,6 +28,10 @@ service SimpleBank {
             post: "/user"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            description: "API for create a new user"
+            summary: "Create new user"
+        };
     };
 
     rpc LoginUser(LoginUserRequest) returns (LoginUserResponse){
@@ -35,11 +39,19 @@ service SimpleBank {
             post: "/auth/login"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            description: "API for login user"
+            summary: "Login user"
+        };
     };
 
     rpc GetListAccount(ListAccountRequest) returns (ListAccountResponse){
         option (google.api.http) = {
             get: "/accounts"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            description: "API for get list account of the user"
+            summary: "Get list account"
         };
     };
 }
