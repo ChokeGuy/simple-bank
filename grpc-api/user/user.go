@@ -7,9 +7,12 @@ import (
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/pb"
+	"github.com/ChokeGuy/simple-bank/pkg/errors"
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/ChokeGuy/simple-bank/validations"
 	"github.com/google/uuid"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -27,6 +30,12 @@ func NewUserHandler(server *sv.Server) *UserHandler {
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
+	violations := validateCreateUserRequest(req)
+
+	if violations != nil {
+		return nil, errors.InvalidAgrumentError(violations)
+	}
+
 	hashedPassword, err := pw.HashPassword(req.GetPassword())
 
 	if err != nil {
@@ -60,6 +69,12 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 }
 
 func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (*pb.LoginUserResponse, error) {
+	violations := validateLoginUserRequest(req)
+
+	if violations != nil {
+		return nil, errors.InvalidAgrumentError(violations)
+	}
+
 	user, err := h.Store.GetUserByUserName(ctx, req.GetUserName())
 
 	if err != nil {
@@ -137,4 +152,36 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 	}
 
 	return response, nil
+}
+
+func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
+	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
+		violations = append(violations, errors.FieldViolation("userName", err))
+	}
+
+	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
+		violations = append(violations, errors.FieldViolation("password", err))
+	}
+
+	if err := validations.ValidateFullName(req.GetFullName()); err != nil {
+		violations = append(violations, errors.FieldViolation("fullName", err))
+	}
+
+	if err := validations.ValidateEmail(req.GetEmail()); err != nil {
+		violations = append(violations, errors.FieldViolation("email", err))
+	}
+
+	return violations
+}
+
+func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
+	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
+		violations = append(violations, errors.FieldViolation("userName", err))
+	}
+
+	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
+		violations = append(violations, errors.FieldViolation("password", err))
+	}
+
+	return violations
 }

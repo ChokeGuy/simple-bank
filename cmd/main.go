@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("Token maker err: %v", err)
 	}
 
-	go runGatewayServer(cf, store, tokenMaker)
+	go runHttpServer(cf, store, tokenMaker)
 	runGrpcServer(cf, store, tokenMaker)
 }
 
