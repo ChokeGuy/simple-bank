@@ -11,7 +11,7 @@ import (
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
-	sv "github.com/ChokeGuy/simple-bank/server"
+	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/google/uuid"

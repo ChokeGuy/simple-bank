@@ -3,21 +3,27 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/ChokeGuy/simple-bank/api/account"
 	"github.com/ChokeGuy/simple-bank/api/transfer"
 	"github.com/ChokeGuy/simple-bank/api/user"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	"github.com/ChokeGuy/simple-bank/pb"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
-	sv "github.com/ChokeGuy/simple-bank/server"
+	grpcSv "github.com/ChokeGuy/simple-bank/server/grpc"
+	httpSv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // setUpRouter set up all routes
-func setUpRouter(server *sv.Server) {
+func setUpRouter(server *httpSv.Server) {
 	server.Router.GET("", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, "Welcome to Simple Bank")
 	})
@@ -51,7 +57,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Token maker err: %v", err)
 	}
-	server, err := sv.NewServer(store, &cf, tokenMaker)
+	runGrpcServer(cf, store, tokenMaker)
+}
+
+func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
+	server, err := httpSv.NewServer(store, &cfg, tokenMaker)
 
 	if err != nil {
 		log.Fatalf("cannot create server: %v", err)
@@ -59,8 +69,30 @@ func main() {
 
 	setUpRouter(server)
 
-	err = server.Start(cf.ServerAddress)
+	err = server.Start(cfg.HttpServerAddress)
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
+	}
+}
+
+func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
+	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
+	if err != nil {
+		log.Fatalf("cannot create server: %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterSimpleBankServer(grpcServer, server)
+	reflection.Register(grpcServer)
+
+	listener, err := net.Listen("tcp", cfg.GrpcServerAddress)
+	if err != nil {
+		log.Fatalf("cannot listen to grpc server: %v", err)
+	}
+
+	log.Printf("start grpc server on %s", cfg.GrpcServerAddress)
+	err = grpcServer.Serve(listener)
+	if err != nil {
+		log.Fatalf("cannot start grpc server: %v", err)
 	}
 }

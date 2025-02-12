@@ -8,7 +8,7 @@ import (
 
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
-	sv "github.com/ChokeGuy/simple-bank/server"
+	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

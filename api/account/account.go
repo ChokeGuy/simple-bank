@@ -9,7 +9,7 @@ import (
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
 	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
-	sv "github.com/ChokeGuy/simple-bank/server"
+	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/lib/pq"
 
