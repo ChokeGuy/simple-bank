@@ -10,6 +10,7 @@ import (
 	"github.com/ChokeGuy/simple-bank/api/transfer"
 	"github.com/ChokeGuy/simple-bank/api/user"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	gUser "github.com/ChokeGuy/simple-bank/grpc-api/user"
 	"github.com/ChokeGuy/simple-bank/pb"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
@@ -57,7 +58,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Token maker err: %v", err)
 	}
-	runGrpcServer(cf, store, tokenMaker)
+	runHttpServer(cf, store, tokenMaker)
 }
 
 func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
@@ -81,8 +82,10 @@ func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 		log.Fatalf("cannot create server: %v", err)
 	}
 
+	userHandler := gUser.NewUserHandler(server)
+
 	grpcServer := grpc.NewServer()
-	pb.RegisterSimpleBankServer(grpcServer, server)
+	pb.RegisterSimpleBankServer(grpcServer, userHandler)
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", cfg.GrpcServerAddress)

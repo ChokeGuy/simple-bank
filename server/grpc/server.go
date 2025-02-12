@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
-	"github.com/ChokeGuy/simple-bank/pb"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 
 	"github.com/ChokeGuy/simple-bank/pkg/token"
@@ -15,7 +14,6 @@ import (
 
 // Server serves GRPC requests for our banking service.
 type Server struct {
-	pb.UnimplementedSimpleBankServer
 	Config     *pkg.Config
 	Store      db.Store
 	Router     *gin.Engine

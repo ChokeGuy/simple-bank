@@ -15,7 +15,7 @@ message LoginUserRequest {
 
 message LoginUserResponse {
     User user = 1;
-    string sessionId = 2;
+    string sessionID = 2;
     string accessToken = 3;
     string refreshToken = 4;
     google.protobuf.Timestamp accessTokenExpiresAt = 5;
