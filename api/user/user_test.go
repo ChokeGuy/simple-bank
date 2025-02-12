@@ -15,7 +15,7 @@ import (
 	mockdb "github.com/ChokeGuy/simple-bank/db/mock"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
-	"github.com/ChokeGuy/simple-bank/server"
+	server "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"

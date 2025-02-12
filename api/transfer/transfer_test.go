@@ -18,7 +18,7 @@ import (
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
-	"github.com/ChokeGuy/simple-bank/server"
+	server "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"

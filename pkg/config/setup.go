@@ -10,7 +10,8 @@ import (
 type Config struct {
 	DBDriver             string        `mapstructure:"DB_DRIVER"`
 	DBSource             string        `mapstructure:"POSTGRES_URL"`
-	ServerAddress        string        `mapstructure:"SERVER_ADDRESS"`
+	HttpServerAddress    string        `mapstructure:"HHTP_SERVER_ADDRESS"`
+	GrpcServerAddress    string        `mapstructure:"GRPC_SERVER_ADDRESS"`
 	SymetricKey          string        `mapstructure:"SYMMETRIC_KEY"`
 	AccessTokenDuration  time.Duration `mapstructure:"ACCESS_TOKEN_DURATION"`
 	RefreshTokenDuration time.Duration `mapstructure:"REFRESH_TOKEN_DURATION"`
