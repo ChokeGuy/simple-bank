@@ -20,6 +20,9 @@ import (
 	grpcSv "github.com/ChokeGuy/simple-bank/server/grpc"
 	httpSv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/gin-gonic/gin"
+	migrate "github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	_ "github.com/lib/pq"
 	"github.com/rakyll/statik/fs"
@@ -27,6 +30,31 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
 )
+
+func main() {
+	cf, err := cf.LoadConfig("./")
+
+	if err != nil {
+		log.Fatalf("cannot load config: %v", err)
+	}
+
+	conn, err := sql.Open(cf.DBDriver, cf.DBSource)
+
+	if err != nil {
+		log.Fatalf("cannot connect to db: %v", err)
+	}
+
+	runDBMigration(cf)
+
+	store := db.NewStore(conn)
+	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
+	if err != nil {
+		log.Fatalf("Token maker err: %v", err)
+	}
+
+	go runHttpServer(cf, store, tokenMaker)
+	runGrpcServer(cf, store, tokenMaker)
+}
 
 // setUpRouter set up all routes
 func setUpRouter(server *httpSv.Server) {
@@ -45,29 +73,7 @@ func setUpRouter(server *httpSv.Server) {
 
 }
 
-func main() {
-	cf, err := cf.LoadConfig("./")
-
-	if err != nil {
-		log.Fatalf("cannot load config: %v", err)
-	}
-
-	conn, err := sql.Open(cf.DBDriver, cf.DBSource)
-
-	if err != nil {
-		log.Fatalf("cannot connect to db: %v", err)
-	}
-
-	store := db.NewStore(conn)
-	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
-	if err != nil {
-		log.Fatalf("Token maker err: %v", err)
-	}
-
-	go runHttpServer(cf, store, tokenMaker)
-	runGrpcServer(cf, store, tokenMaker)
-}
-
+// runHttpServer run http server
 func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	server, err := httpSv.NewServer(store, &cfg, tokenMaker)
 
@@ -83,6 +89,7 @@ func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	}
 }
 
+// runGrpcServer run grpc server
 func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
 	if err != nil {
@@ -107,6 +114,7 @@ func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	}
 }
 
+// runGatewayServer run grpc-gateway server
 func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
 	if err != nil {
@@ -154,4 +162,17 @@ func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	if err != nil {
 		log.Fatalf("cannot start HTTP Gatewat Server: %v", err)
 	}
+}
+
+func runDBMigration(cfg cf.Config) {
+	migration, err := migrate.New(cfg.MigrationUrl, cfg.DBSource)
+	if err != nil {
+		log.Fatalf("cannot create migration: %v", err)
+	}
+
+	if err = migration.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("failed to run migrate up: %v", err)
+	}
+
+	log.Printf("db migration successfully")
 }

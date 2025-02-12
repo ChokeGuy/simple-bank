@@ -10,6 +10,7 @@ import (
 type Config struct {
 	DBDriver             string        `mapstructure:"DB_DRIVER"`
 	DBSource             string        `mapstructure:"POSTGRES_URL"`
+	MigrationUrl         string        `mapstructure:"MIGRATION_URL"`
 	HttpServerAddress    string        `mapstructure:"HTTP_SERVER_ADDRESS"`
 	GrpcServerAddress    string        `mapstructure:"GRPC_SERVER_ADDRESS"`
 	SymetricKey          string        `mapstructure:"SYMMETRIC_KEY"`
