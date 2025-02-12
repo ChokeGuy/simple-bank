@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net"
@@ -10,7 +11,8 @@ import (
 	"github.com/ChokeGuy/simple-bank/api/transfer"
 	"github.com/ChokeGuy/simple-bank/api/user"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
-	gUser "github.com/ChokeGuy/simple-bank/grpc-api/user"
+	_ "github.com/ChokeGuy/simple-bank/doc/statik"
+	grpcapi "github.com/ChokeGuy/simple-bank/grpc-api"
 	"github.com/ChokeGuy/simple-bank/pb"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
@@ -18,9 +20,12 @@ import (
 	grpcSv "github.com/ChokeGuy/simple-bank/server/grpc"
 	httpSv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/gin-gonic/gin"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	_ "github.com/lib/pq"
+	"github.com/rakyll/statik/fs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // setUpRouter set up all routes
@@ -58,7 +63,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Token maker err: %v", err)
 	}
-	runHttpServer(cf, store, tokenMaker)
+
+	go runGatewayServer(cf, store, tokenMaker)
+	runGrpcServer(cf, store, tokenMaker)
 }
 
 func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
@@ -82,10 +89,10 @@ func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 		log.Fatalf("cannot create server: %v", err)
 	}
 
-	userHandler := gUser.NewUserHandler(server)
+	serviceHandler := grpcapi.NewServiceHandler(server)
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterSimpleBankServer(grpcServer, userHandler)
+	pb.RegisterSimpleBankServer(grpcServer, serviceHandler)
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", cfg.GrpcServerAddress)
@@ -97,5 +104,54 @@ func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	err = grpcServer.Serve(listener)
 	if err != nil {
 		log.Fatalf("cannot start grpc server: %v", err)
+	}
+}
+
+func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
+	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
+	if err != nil {
+		log.Fatalf("cannot create server: %v", err)
+	}
+
+	serviceHandler := grpcapi.NewServiceHandler(server)
+
+	jsonOption := runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
+		MarshalOptions: protojson.MarshalOptions{
+			UseProtoNames: true,
+		},
+		UnmarshalOptions: protojson.UnmarshalOptions{
+			DiscardUnknown: true,
+		},
+	})
+
+	grpcMux := runtime.NewServeMux(jsonOption)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err = pb.RegisterSimpleBankHandlerServer(ctx, grpcMux, serviceHandler)
+	if err != nil {
+		log.Fatalf("cannot register grpc handler: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/", grpcMux)
+
+	statikFS, err := fs.New()
+	if err != nil {
+		log.Fatalf("cannot create statik file system: %v", err)
+	}
+
+	swaggerHandler := http.StripPrefix("/swagger/", http.FileServer(statikFS))
+	mux.Handle("/swagger/", swaggerHandler)
+
+	listener, err := net.Listen("tcp", cfg.HttpServerAddress)
+	if err != nil {
+		log.Fatalf("cannot listen to grpc server: %v", err)
+	}
+
+	log.Printf("start http gateway server on %s", cfg.HttpServerAddress)
+	err = http.Serve(listener, mux)
+	if err != nil {
+		log.Fatalf("cannot start HTTP Gatewat Server: %v", err)
 	}
 }

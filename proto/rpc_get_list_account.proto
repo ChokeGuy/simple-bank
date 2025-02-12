@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package pb;
+
+import "account.proto";
+
+option go_package = "github.com/ChokeGuy/simple-bank/pb";
+
+message ListAccountRequest {
+    string owner = 1;
+    int32 page = 2;
+    int32 size = 3;
+}
+
+message ListAccountResponse {
+    repeated Account accounts = 1;
+    int32 length = 2;
+}
+
