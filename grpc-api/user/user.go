@@ -60,7 +60,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 }
 
 func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (*pb.LoginUserResponse, error) {
-	user, err := h.Store.GetUserByUserName(ctx, req.GetUsername())
+	user, err := h.Store.GetUserByUserName(ctx, req.GetUserName())
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -74,7 +74,7 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 		return nil, status.Errorf(codes.InvalidArgument, "invalid password")
 	}
 
-	if session, _ := h.Store.GetSessionByUserName(ctx, req.GetUsername()); session.ID != uuid.Nil {
+	if session, _ := h.Store.GetSessionByUserName(ctx, req.GetUserName()); session.ID != uuid.Nil {
 		// Check if session is expired
 		if time.Now().After(session.ExpiresAt) {
 			// Delete expired session
@@ -103,12 +103,14 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 		return nil, status.Errorf(codes.Internal, "failed to create refresh token: %v", err)
 	}
 
+	metadata := h.extractMetadata(ctx)
+
 	arg := db.CreateSessionParams{
 		ID:           uuid.MustParse(rTkPayload.ID),
 		Username:     user.Username,
 		RefreshToken: refreshToken,
-		UserAgent:    "",
-		ClientIp:     "",
+		UserAgent:    metadata.UserClient,
+		ClientIp:     metadata.ClientIP,
 		IsBlocked:    false,
 		ExpiresAt:    rTkPayload.ExpiresAt.Time,
 	}

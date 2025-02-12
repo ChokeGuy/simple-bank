@@ -9,7 +9,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/ChokeGuy/simple-bank/pb";
 
 message LoginUserRequest {
-    string username = 1;
+    string userName = 1;
     string password = 2;
 }
 
