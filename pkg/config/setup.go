@@ -8,6 +8,7 @@ import (
 
 // Config is the configuration for the application
 type Config struct {
+	ENV                  string        `mapstructure:"ENV"`
 	DBDriver             string        `mapstructure:"DB_DRIVER"`
 	DBSource             string        `mapstructure:"POSTGRES_URL"`
 	MigrationUrl         string        `mapstructure:"MIGRATION_URL"`

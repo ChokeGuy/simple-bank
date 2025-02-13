@@ -3,17 +3,22 @@ package user
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/ChokeGuy/simple-bank/consts"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/pb"
 	"github.com/ChokeGuy/simple-bank/pkg/errors"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/ChokeGuy/simple-bank/validations"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -26,6 +31,38 @@ type UserHandler struct {
 
 func NewUserHandler(server *sv.Server) *UserHandler {
 	return &UserHandler{Server: server}
+}
+
+func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+
+	if !ok {
+		return nil, fmt.Errorf("metadata not provided")
+	}
+
+	values := md.Get(consts.AuthorizationHeader)
+	if len(values) == 0 {
+		return nil, fmt.Errorf("missing authorization header")
+	}
+	authHeader := values[0]
+	fields := strings.Fields(authHeader)
+	if len(fields) != 2 {
+		return nil, fmt.Errorf("invalid authorization header format")
+	}
+
+	authType := strings.ToLower(fields[0])
+
+	if authType != consts.AuthorizationType {
+		return nil, fmt.Errorf("unsupported authorization type")
+	}
+
+	accessToken := fields[1]
+	payload, err := h.Server.TokenMaker.VerifyToken(accessToken)
+	if err != nil {
+		return nil, fmt.Errorf("invalid access token")
+	}
+
+	return payload, nil
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
@@ -154,10 +191,20 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 }
 
 func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	authPayload, err := h.authorizeUser(ctx)
+
+	if err != nil {
+		return nil, errors.UnAuthorizedError(err)
+	}
+
 	violations := validateUpdateUserRequest(req)
 
 	if violations != nil {
 		return nil, errors.InvalidAgrumentError(violations)
+	}
+
+	if authPayload.UserName != req.GetUserName() {
+		return nil, status.Errorf(codes.PermissionDenied, "unauthorized user")
 	}
 
 	arg := db.UpdateUserParams{
