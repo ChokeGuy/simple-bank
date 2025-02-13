@@ -19,3 +19,9 @@ type LoginUserRequest struct {
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
 }
+
+type UpdateUserRequest struct {
+	UserName string `json:"userName" binding:"alphanum"`
+	FullName string `json:"fullName" binding:"omitempty,min=3,max=100"`
+	Email    string `json:"email" binding:"omitempty,email"`
+}

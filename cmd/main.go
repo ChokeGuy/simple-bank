@@ -160,7 +160,7 @@ func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	log.Printf("start http gateway server on %s", cfg.HttpServerAddress)
 	err = http.Serve(listener, mux)
 	if err != nil {
-		log.Fatalf("cannot start HTTP Gatewat Server: %v", err)
+		log.Fatalf("cannot start HTTP Gateway Server: %v", err)
 	}
 }
 

@@ -7,13 +7,14 @@ import "protoc-gen-openapiv2/options/annotations.proto";
 import "rpc_create_user.proto";
 import "rpc_login_user.proto";
 import "rpc_get_list_account.proto";
+import "rpc_update_user.proto";
 
 option go_package = "github.com/ChokeGuy/simple-bank/pb";
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
     info: {
       title: "Simple Bank API"
-      version: "0.0.1"
+      version: "1.2"
       contact: {
         name: "Nguyen Thang"
         url: "https://github.com/ChokeGuy/simple-bank"
@@ -31,6 +32,16 @@ service SimpleBank {
         option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
             description: "API for create a new user"
             summary: "Create new user"
+        };
+    };
+    rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse){
+        option (google.api.http) = {
+            patch: "/user/update"
+            body: "*"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            description: "API for update user information"
+            summary: "Update user info"
         };
     };
 

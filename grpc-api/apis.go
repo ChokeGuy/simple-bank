@@ -33,3 +33,7 @@ func (h *ServiceHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest
 func (h *ServiceHandler) GetListAccount(ctx context.Context, req *pb.ListAccountRequest) (*pb.ListAccountResponse, error) {
 	return h.AccountHandler.GetListAccount(ctx, req)
 }
+
+func (h *ServiceHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	return h.UserHandler.UpdateUser(ctx, req)
+}

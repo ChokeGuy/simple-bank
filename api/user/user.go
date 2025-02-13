@@ -10,6 +10,8 @@ import (
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	res "github.com/ChokeGuy/simple-bank/pkg/http_response"
+	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
+	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
@@ -36,6 +38,9 @@ func (h *UserHandler) MapRoutes() {
 	router.POST("/auth/login", h.loginUser)
 	router.POST("/auth/refresh-token", h.refreshNewToken)
 	router.GET("/user", h.getUserByUserName)
+
+	authRoutes := router.Group("/").Use(auth.AuthMiddleWare(h.TokenMaker))
+	authRoutes.PATCH("/user/update", h.updateUser)
 }
 
 // Create radom user
@@ -247,6 +252,56 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User logged in successfully"))
+}
+
+func (h *UserHandler) updateUser(ctx *gin.Context) {
+	var req dto.UpdateUserRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
+	if authPayload.UserName != user.Username {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Unauthorized user"))
+		return
+	}
+
+	arg := db.UpdateUserParams{
+		Username: req.UserName,
+		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
+		Email:    sql.NullString{String: req.Email, Valid: req.Email != ""},
+	}
+
+	result, err := h.Store.UpdateUser(ctx, arg)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	response := dto.UserResponse{
+		UserName:          result.Username,
+		FullName:          result.FullName,
+		Email:             result.Email,
+		PasswordChangedAt: result.PasswordChangedAt.String(),
+		CreatedAt:         result.CreatedAt.String(),
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User updated successfully"))
 }
 
 func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
