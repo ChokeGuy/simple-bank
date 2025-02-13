@@ -262,9 +262,7 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 		return
 	}
 
-	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
-
-	_, err := h.Store.GetUserByUserName(ctx, authPayload.UserName)
+	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -275,8 +273,15 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(auth.AuthPayloadKey).(*token.Payload)
+
+	if authPayload.UserName != user.Username {
+		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Unauthorized user"))
+		return
+	}
+
 	arg := db.UpdateUserParams{
-		Username: authPayload.UserName,
+		Username: req.UserName,
 		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
 		Email:    sql.NullString{String: req.Email, Valid: req.Email != ""},
 	}

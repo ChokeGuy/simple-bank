@@ -21,6 +21,7 @@ type RefreshTokenRequest struct {
 }
 
 type UpdateUserRequest struct {
-	FullName string `json:"fullName"`
-	Email    string `json:"email"`
+	UserName string `json:"userName" binding:"alphanum"`
+	FullName string `json:"fullName" binding:"omitempty,min=3,max=100"`
+	Email    string `json:"email" binding:"omitempty,email"`
 }

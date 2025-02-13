@@ -21,7 +21,6 @@ import (
 )
 
 type UserHandler struct {
-	pb.UnimplementedSimpleBankServer
 	*sv.Server
 }
 
@@ -154,6 +153,41 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 	return response, nil
 }
 
+func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	violations := validateUpdateUserRequest(req)
+
+	if violations != nil {
+		return nil, errors.InvalidAgrumentError(violations)
+	}
+
+	arg := db.UpdateUserParams{
+		Username: req.GetUserName(),
+		FullName: sql.NullString{
+			String: req.GetFullName(),
+			Valid:  req.FullName != nil,
+		},
+		Email: sql.NullString{
+			String: req.GetEmail(),
+			Valid:  req.Email != nil,
+		},
+	}
+
+	user, err := h.Store.UpdateUser(ctx, arg)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Errorf(codes.NotFound, "user not found")
+		}
+
+		return nil, status.Errorf(codes.Internal, "failed to update user: %v", err)
+	}
+
+	response := &pb.UpdateUserResponse{
+		User: convertUser(user),
+	}
+	return response, nil
+}
+
 func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
 		violations = append(violations, errors.FieldViolation("userName", err))
@@ -181,6 +215,26 @@ func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetail
 
 	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
 		violations = append(violations, errors.FieldViolation("password", err))
+	}
+
+	return violations
+}
+
+func validateUpdateUserRequest(req *pb.UpdateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
+	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
+		violations = append(violations, errors.FieldViolation("userName", err))
+	}
+
+	if req.FullName != nil {
+		if err := validations.ValidateFullName(req.GetFullName()); err != nil {
+			violations = append(violations, errors.FieldViolation("fullName", err))
+		}
+	}
+
+	if req.Email != nil {
+		if err := validations.ValidateEmail(req.GetEmail()); err != nil {
+			violations = append(violations, errors.FieldViolation("email", err))
+		}
 	}
 
 	return violations

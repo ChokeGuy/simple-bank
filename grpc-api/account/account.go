@@ -11,7 +11,6 @@ import (
 )
 
 type AccountHandler struct {
-	pb.UnimplementedSimpleBankServer
 	*sv.Server
 }
 
