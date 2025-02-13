@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -75,6 +76,44 @@ func (q *Queries) GetUserByUserName(ctx context.Context, username string) (GetUs
 		&i.Email,
 		&i.PasswordChangedAt,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE 
+    users
+SET
+    hashed_password = COALESCE($1, hashed_password),
+    full_name = COALESCE($2, full_name),
+    email = COALESCE($3, email)
+WHERE
+    username = $4
+RETURNING username, hashed_password, full_name, email, created_at, password_changed_at
+`
+
+type UpdateUserParams struct {
+	HashedPassword sql.NullString `json:"hashed_password"`
+	FullName       sql.NullString `json:"full_name"`
+	Email          sql.NullString `json:"email"`
+	Username       string         `json:"username"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUser,
+		arg.HashedPassword,
+		arg.FullName,
+		arg.Email,
+		arg.Username,
+	)
+	var i User
+	err := row.Scan(
+		&i.Username,
+		&i.HashedPassword,
+		&i.FullName,
+		&i.Email,
+		&i.CreatedAt,
+		&i.PasswordChangedAt,
 	)
 	return i, err
 }
