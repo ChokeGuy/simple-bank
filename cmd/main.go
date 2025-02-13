@@ -168,7 +168,9 @@ func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 	}
 
 	log.Info().Msgf("start http gateway server on %s", cfg.HttpServerAddress)
-	err = http.Serve(listener, mux)
+	handler := logger.HttpLogger(mux)
+
+	err = http.Serve(listener, handler)
 	if err != nil {
 		log.Fatal().Msgf("cannot start HTTP Gateway Server: %v", err)
 	}
