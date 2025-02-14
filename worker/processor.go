@@ -4,6 +4,7 @@ import (
 	"context"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	"github.com/ChokeGuy/simple-bank/pkg/logger"
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
 )
@@ -31,6 +32,14 @@ func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskPr
 				QueueCritical: 10,
 				QueueDefault:  5,
 			},
+			ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
+				log.Error().
+					Err(err).
+					Str("task_type", task.Type()).
+					Bytes("task_payload", task.Payload()).
+					Msg("process task failed")
+			}),
+			Logger: logger.TaskLogger(),
 		},
 	)
 

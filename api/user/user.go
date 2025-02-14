@@ -116,7 +116,7 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 			opts := []asynq.Option{
 				asynq.MaxRetry(10),
 				asynq.ProcessIn(10 * time.Second),
-				asynq.Queue(worker.QueueDefault),
+				asynq.Queue(worker.QueueCritical),
 			}
 
 			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
