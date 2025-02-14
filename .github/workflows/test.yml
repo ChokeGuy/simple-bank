@@ -52,6 +52,13 @@ jobs:
           echo "SYMMETRIC_KEY=${{secrets.SYMMETRIC_KEY}}" >> .env
           echo "ACCESS_TOKEN_DURATION=${{secrets.ACCESS_TOKEN_DURATION}}" >> .env
           echo "REFRESH_TOKEN_DURATION=${{secrets.REFRESH_TOKEN_DURATION}}" >> .env
+          echo "REDIS_ADDRESS=${{secrets.REDIS_ADDRESS}}" >> .env
+          echo "EMAIL_SENDER_NAME=${{secrets.EMAIL_SENDER_NAME}}" >> .env
+          echo "EMAIL_SENDER_ADDRESS=${{secrets.EMAIL_SENDER_ADDRESS}}" >> .env
+          echo "EMAIL_SENDER_PASSWORD=${{secrets.EMAIL_SENDER_PASSWORD}}" >> .env
+          echo "AWS_ACCESS_KEY_ID=${{secrets.AWS_ACCESS_KEY_ID}}" >> .env
+          echo "AWS_SECRET_ACCESS_KEY=${{secrets.AWS_SECRET_ACCESS_KEY}}" >> .env
+          echo "AWS_REGION=${{secrets.AWS_REGION}}" >> .env
       
       - name: Install golang-migrate
         run: |

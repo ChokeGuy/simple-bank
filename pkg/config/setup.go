@@ -12,11 +12,18 @@ type Config struct {
 	DBDriver             string        `mapstructure:"DB_DRIVER"`
 	DBSource             string        `mapstructure:"POSTGRES_URL"`
 	MigrationUrl         string        `mapstructure:"MIGRATION_URL"`
+	RedisAddress         string        `mapstructure:"REDIS_ADDRESS"`
 	HttpServerAddress    string        `mapstructure:"HTTP_SERVER_ADDRESS"`
 	GrpcServerAddress    string        `mapstructure:"GRPC_SERVER_ADDRESS"`
 	SymetricKey          string        `mapstructure:"SYMMETRIC_KEY"`
 	AccessTokenDuration  time.Duration `mapstructure:"ACCESS_TOKEN_DURATION"`
 	RefreshTokenDuration time.Duration `mapstructure:"REFRESH_TOKEN_DURATION"`
+	EmailSenderName      string        `mapstructure:"EMAIL_SENDER_NAME"`
+	EmailSenderAddress   string        `mapstructure:"EMAIL_SENDER_ADDRESS"`
+	EmailSenderPassword  string        `mapstructure:"EMAIL_SENDER_PASSWORD"`
+	AWSRegion            string        `mapstructure:"AWS_REGION"`
+	AWSAcessKeyID        string        `mapstructure:"AWS_ACCESS_KEY_ID"`
+	AWSSecretKey         string        `mapstructure:"AWS_SECRET_ACCESS_KEY"`
 }
 
 // LoadConfig loads the configuration from the file
