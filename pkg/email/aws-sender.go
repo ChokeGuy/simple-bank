@@ -16,6 +16,7 @@ import (
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 )
@@ -46,6 +47,11 @@ func NewSesEmailSender() (*SesEmailSender, error) {
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
 		config.WithRegion(envCfg.AWSRegion),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				envCfg.AWSAcessKeyID,
+				envCfg.AWSSecretKey,
+				"")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %v", err)
