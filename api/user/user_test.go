@@ -147,17 +147,21 @@ func TestCreateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
-				}
+				// arg := db.CreateUserTxParams{
+				// 	CreateUserParams: db.CreateUserParams{
+				// 		Username:       user.Username,
+				// 		FullName:       user.FullName,
+				// 		HashedPassword: user.HashedPassword,
+				// 		Email:          user.Email,
+				// 	},
+				// }
 
 				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
+					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(user, nil)
+					Return(db.CreateUserTxResult{
+						User: user,
+					}, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -173,17 +177,20 @@ func TestCreateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
-				}
+				// arg := db.CreateUserTxParams{
+				// 	CreateUserParams: db.CreateUserParams{
+				// 		Username:       user.Username,
+				// 		FullName:       user.FullName,
+				// 		HashedPassword: user.HashedPassword,
+				// 		Email:          user.Email,
+				// 	},
+				// }
 
 				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
+					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.User{}, sql.ErrConnDone)
+					Return(db.CreateUserTxResult{}, sql.ErrConnDone)
+
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -198,17 +205,19 @@ func TestCreateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
-				}
+				// arg := db.CreateUserTxParams{
+				// 	CreateUserParams: db.CreateUserParams{
+				// 		Username:       user.Username,
+				// 		FullName:       user.FullName,
+				// 		HashedPassword: user.HashedPassword,
+				// 		Email:          user.Email,
+				// 	},
+				// }
 
 				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
+					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.User{}, sql.ErrConnDone)
+					Return(db.CreateUserTxResult{}, sql.ErrConnDone)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

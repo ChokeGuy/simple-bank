@@ -80,14 +80,30 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 		return nil, status.Errorf(codes.Internal, "failed to hash password: %v", err)
 	}
 
-	arg := db.CreateUserParams{
-		Username:       req.GetUserName(),
-		FullName:       req.GetFullName(),
-		Email:          req.GetEmail(),
-		HashedPassword: hashedPassword,
+	arg := db.CreateUserTxParams{
+		CreateUserParams: db.CreateUserParams{
+			Username:       req.UserName,
+			FullName:       req.FullName,
+			Email:          req.Email,
+			HashedPassword: hashedPassword,
+		},
+		AfterCreate: func(user db.User) error {
+			//Send verification email to user
+			taskPayload := &worker.PayloadSendVerifyEmail{
+				UserName: user.Username,
+			}
+
+			opts := []asynq.Option{
+				asynq.MaxRetry(10),
+				asynq.ProcessIn(10 * time.Second),
+				asynq.Queue(worker.QueueDefault),
+			}
+
+			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+		},
 	}
 
-	user, err := h.Store.CreateUser(ctx, arg)
+	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -100,24 +116,8 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
 	}
 
-	//Send verification email to user
-	//TODO: Implement use db transaction to rollback user creation if email sending fails
-	taskPayload := &worker.PayloadSendVerifyEmail{
-		UserName: user.Username,
-	}
-
-	opts := []asynq.Option{
-		asynq.MaxRetry(10),
-		asynq.ProcessIn(10 * time.Second),
-		asynq.Queue(worker.QueueCritical),
-	}
-
-	if err := h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to send verification email: %v", err)
-	}
-
 	response := &pb.CreateUserResponse{
-		User: convertUser(user),
+		User: convertUser(user.User),
 	}
 	return response, nil
 }

@@ -100,14 +100,30 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
-	arg := db.CreateUserParams{
-		Username:       req.UserName,
-		FullName:       req.FullName,
-		Email:          req.Email,
-		HashedPassword: hashedPassword,
+	arg := db.CreateUserTxParams{
+		CreateUserParams: db.CreateUserParams{
+			Username:       req.UserName,
+			FullName:       req.FullName,
+			Email:          req.Email,
+			HashedPassword: hashedPassword,
+		},
+		AfterCreate: func(user db.User) error {
+			//Send verification email to user
+			taskPayload := &worker.PayloadSendVerifyEmail{
+				UserName: user.Username,
+			}
+
+			opts := []asynq.Option{
+				asynq.MaxRetry(10),
+				asynq.ProcessIn(10 * time.Second),
+				asynq.Queue(worker.QueueDefault),
+			}
+
+			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+		},
 	}
 
-	user, err := h.Store.CreateUser(ctx, arg)
+	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -122,29 +138,12 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
-	//Send verification email to user
-
-	taskPayload := &worker.PayloadSendVerifyEmail{
-		UserName: user.Username,
-	}
-
-	opts := []asynq.Option{
-		asynq.MaxRetry(10),
-		asynq.ProcessIn(10 * time.Second),
-		asynq.Queue(worker.QueueDefault),
-	}
-
-	if err := h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...); err != nil {
-		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
-		return
-	}
-
 	response := dto.UserResponse{
-		UserName:          user.Username,
-		FullName:          user.FullName,
-		Email:             user.Email,
-		PasswordChangedAt: user.PasswordChangedAt.String(),
-		CreatedAt:         user.CreatedAt.String(),
+		UserName:          user.User.Username,
+		FullName:          user.User.FullName,
+		Email:             user.User.Email,
+		PasswordChangedAt: user.User.PasswordChangedAt.String(),
+		CreatedAt:         user.User.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User created successfully"))
