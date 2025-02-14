@@ -68,8 +68,8 @@ func main() {
 
 	taskDistributor := worker.NewRedisTaskDistributior(redisOpt)
 
-	go runTaskProcessor(redisOpt, store)
-	go runGatewayServer(cf, store, tokenMaker, taskDistributor)
+	go worker.RunTaskProcessor(redisOpt, store)
+	go runHttpServer(cf, store, tokenMaker, taskDistributor)
 	runGrpcServer(cf, store, tokenMaker, taskDistributor)
 }
 
@@ -195,15 +195,4 @@ func runDBMigration(cfg cf.Config) {
 	}
 
 	log.Info().Msg("db migration successfully")
-}
-
-// runTaskProcessor run redis task processor
-func runTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
-	taskProcessor := worker.NewRedisTaskProcessor(redisOpt, store)
-	log.Info().Msg("start task processor")
-
-	err := taskProcessor.Start()
-	if err != nil {
-		log.Fatal().Err(err).Msg("fail to start task processor")
-	}
 }

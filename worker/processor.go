@@ -5,6 +5,7 @@ import (
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/hibiken/asynq"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -45,4 +46,15 @@ func (processor *RedisTaskProcessor) Start() error {
 	mux.HandleFunc(TaskSendVerifyEmail, processor.ProcessTaskSendVerifyEmail)
 
 	return processor.server.Start(mux)
+}
+
+// RunTaskProcessor run redis task processor
+func RunTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
+	taskProcessor := NewRedisTaskProcessor(redisOpt, store)
+	log.Info().Msg("start task processor")
+
+	err := taskProcessor.Start()
+	if err != nil {
+		log.Fatal().Err(err).Msg("fail to start task processor")
+	}
 }
