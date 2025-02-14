@@ -43,4 +43,6 @@ proto:
 	statik -f -src=./doc/swagger -dest=./doc
 evans:
 	evans --host localhost --port 9000 -r --package pb
-.PHONY: postgres createdb dropdb sqlc db_docs db_schema proto evans migratecreate migrateup migratedown migrateup1 migratedown1 test server mock
+redis:
+	docker run --name redis-container -p 6379:6379 -d redis:7.4.2-alpine3.21
+.PHONY: postgres createdb dropdb sqlc db_docs db_schema proto redis evans migratecreate migrateup migratedown migrateup1 migratedown1 test server mock

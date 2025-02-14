@@ -16,7 +16,9 @@ import (
 	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +107,7 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		HashedPassword: hashedPassword,
 	}
 
-	result, err := h.Store.CreateUser(ctx, arg)
+	user, err := h.Store.CreateUser(ctx, arg)
 
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -120,12 +122,29 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
+	//Send verification email to user
+
+	taskPayload := &worker.PayloadSendVerifyEmail{
+		UserName: user.Username,
+	}
+
+	opts := []asynq.Option{
+		asynq.MaxRetry(10),
+		asynq.ProcessIn(10 * time.Second),
+		asynq.Queue(worker.QueueCritical),
+	}
+
+	if err := h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...); err != nil {
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
 	response := dto.UserResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          user.Username,
+		FullName:          user.FullName,
+		Email:             user.Email,
+		PasswordChangedAt: user.PasswordChangedAt.String(),
+		CreatedAt:         user.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User created successfully"))
@@ -139,7 +158,7 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.Store.GetUserByUserName(ctx, req.UserName)
+	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -151,11 +170,11 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 	}
 
 	response := dto.GetUserByUserNameResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          user.Username,
+		FullName:          user.FullName,
+		Email:             user.Email,
+		PasswordChangedAt: user.PasswordChangedAt.String(),
+		CreatedAt:         user.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User retrieved successfully"))
@@ -286,7 +305,7 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 		Email:    sql.NullString{String: req.Email, Valid: req.Email != ""},
 	}
 
-	result, err := h.Store.UpdateUser(ctx, arg)
+	updateUser, err := h.Store.UpdateUser(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -294,11 +313,11 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 	}
 
 	response := dto.UserResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          updateUser.Username,
+		FullName:          updateUser.FullName,
+		Email:             updateUser.Email,
+		PasswordChangedAt: updateUser.PasswordChangedAt.String(),
+		CreatedAt:         updateUser.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User updated successfully"))

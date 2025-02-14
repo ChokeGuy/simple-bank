@@ -13,7 +13,6 @@ import (
 
 	req "github.com/ChokeGuy/simple-bank/api/user/dto"
 	mockdb "github.com/ChokeGuy/simple-bank/db/mock"
-	"github.com/ChokeGuy/simple-bank/db/sqlc"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
@@ -850,7 +849,7 @@ func TestUpdateUserApi(t *testing.T) {
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,
@@ -885,7 +884,7 @@ func TestUpdateUserApi(t *testing.T) {
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,
@@ -922,7 +921,7 @@ func TestUpdateUserApi(t *testing.T) {
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,

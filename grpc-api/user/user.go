@@ -15,7 +15,9 @@ import (
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/ChokeGuy/simple-bank/validations"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -96,6 +98,22 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
+	}
+
+	//Send verification email to user
+	//TODO: Implement use db transaction to rollback user creation if email sending fails
+	taskPayload := &worker.PayloadSendVerifyEmail{
+		UserName: user.Username,
+	}
+
+	opts := []asynq.Option{
+		asynq.MaxRetry(10),
+		asynq.ProcessIn(10 * time.Second),
+		asynq.Queue(worker.QueueCritical),
+	}
+
+	if err := h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to send verification email: %v", err)
 	}
 
 	response := &pb.CreateUserResponse{
