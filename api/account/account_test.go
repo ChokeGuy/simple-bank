@@ -146,7 +146,7 @@ func TestGetAccountApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
@@ -258,7 +258,7 @@ func TestCreateccountApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
@@ -382,7 +382,7 @@ func TestListccountApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -532,7 +532,7 @@ func TestDeleteAccountApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			accountHandler := NewAccountHandler(server)
 			accountHandler.MapRoutes()
 			recorder := httptest.NewRecorder()

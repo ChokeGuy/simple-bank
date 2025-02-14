@@ -18,8 +18,10 @@ import (
 	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	server "github.com/ChokeGuy/simple-bank/server/http"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -108,7 +110,7 @@ func TestGetUserByUserNameApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
@@ -241,7 +243,13 @@ func TestCreateUserApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			redisOpt := asynq.RedisClientOpt{
+				Addr: cfg.RedisAddress,
+			}
+
+			taskDistributor := worker.NewRedisTaskDistributior(redisOpt)
+
+			server := server.NewTestServer(t, store, &cfg, taskDistributor)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -552,7 +560,7 @@ func TestLoginUserApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -803,7 +811,7 @@ func TestRefreshTokenApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -1058,7 +1066,7 @@ func TestUpdateUserApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()

@@ -350,7 +350,7 @@ func TestCreateTransfer(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
@@ -614,7 +614,7 @@ func TestGetTransfers(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
@@ -817,7 +817,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()
@@ -1019,7 +1019,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			transferHandler := NewTransferHandler(server)
 			transferHandler.MapRoutes()

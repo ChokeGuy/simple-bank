@@ -52,11 +52,11 @@ func NewServer(
 }
 
 // NewTestServer creates a new HTTP server for testing.
-func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config) *Server {
+func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor worker.TaskDistributior) *Server {
 	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
 	require.NoError(t, err)
 
-	server, err := NewServer(store, cf, tokenMaker, nil)
+	server, err := NewServer(store, cf, tokenMaker, taskDistributor)
 	require.NoError(t, err)
 
 	return server

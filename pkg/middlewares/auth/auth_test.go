@@ -71,7 +71,7 @@ func TestAuthMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, _ := pkg.LoadConfig("../../..")
 
-			server := sv.NewTestServer(t, nil, &cfg)
+			server := sv.NewTestServer(t, nil, &cfg, nil)
 
 			authPath := "/auth"
 			server.Router.GET(
