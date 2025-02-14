@@ -62,7 +62,7 @@ jobs:
       - name: Run migration
         run: make migrateup
       
-      - NAME: Run redis
+      - name: Run redis
         run: make redis
 
       - name: Run tests
