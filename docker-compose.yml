@@ -1,5 +1,6 @@
 version: "3.9"
-services: 
+services:
+  # database container
   postgres-container:
     image: postgres:17-alpine
     environment:
@@ -16,7 +17,21 @@ services:
       timeout: 5s
       retries: 5
     restart: always
-
+  # redis async worker container
+  redis-container:
+    image: redis:7.4.2-alpine3.21
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s   
+      timeout: 3s     
+      retries: 3
+      start_period: 5s
+    restart: always
+  # apis container
   api:
     build:
       context: .
@@ -24,14 +39,20 @@ services:
     environment:
       POSTGRES_HOST: postgres-container
       POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-container:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
+      REDIS_ADDRESS: redis-container:6379
       GIN_MODE: release
     depends_on:
       postgres-container:
         condition: service_healthy
+      redis-container:
+        condition: service_healthy
     ports:
       - "8080:8080"
+      - "9000:9000"
     restart: always
 
 volumes:
   postgres-data:
+    driver: local
+  redis-data:
     driver: local

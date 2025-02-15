@@ -579,9 +579,10 @@ func addAuthorizationMetadata(
 	t *testing.T,
 	tokenMaker token.Maker,
 	username string,
+	role string,
 	duration time.Duration,
 ) context.Context {
-	token, payload, err := tokenMaker.CreateToken(username, duration)
+	token, payload, err := tokenMaker.CreateToken(username, role, duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, payload)
 
@@ -615,6 +616,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					user.Username,
+					user.Role,
 					time.Minute,
 				)
 			},
@@ -679,7 +681,8 @@ func TestUpdateUserApi(t *testing.T) {
 					context.Background(),
 					t,
 					tokenMaker,
-					"unauthorized_user", // Different username from request
+					"unauthorized_user",
+					user.Role,
 					time.Minute,
 				)
 			},
@@ -707,6 +710,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					user.Username,
+					user.Role,
 					time.Minute,
 				)
 			},
@@ -735,6 +739,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					user.Username,
+					user.Role,
 					-time.Minute, // Expired token
 				)
 			},
@@ -763,6 +768,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					user.Username,
+					user.Role,
 					time.Minute,
 				)
 			},
@@ -804,6 +810,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					user.Username,
+					user.Role,
 					time.Minute,
 				)
 			},
@@ -833,6 +840,7 @@ func TestUpdateUserApi(t *testing.T) {
 					t,
 					tokenMaker,
 					"invalid@username",
+					user.Role,
 					time.Minute,
 				)
 			},

@@ -854,7 +854,7 @@ func TestUpdateUserApi(t *testing.T) {
 				FullName: user.FullName,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
@@ -889,7 +889,7 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
@@ -925,7 +925,7 @@ func TestUpdateUserApi(t *testing.T) {
 				FullName: user.FullName,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
@@ -960,7 +960,7 @@ func TestUpdateUserApi(t *testing.T) {
 				UserName: "nonexistent",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.FullName, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.FullName, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
@@ -975,7 +975,7 @@ func TestUpdateUserApi(t *testing.T) {
 				UserName: user.Username,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{
@@ -1007,7 +1007,7 @@ func TestUpdateUserApi(t *testing.T) {
 			name: "BadRequest",
 			body: req.UpdateUserRequest{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(0)
@@ -1024,7 +1024,7 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, sql.ErrConnDone)
@@ -1041,7 +1041,7 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{

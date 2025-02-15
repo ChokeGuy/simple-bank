@@ -92,7 +92,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -131,7 +131,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -187,7 +187,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -214,7 +214,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -246,7 +246,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -275,7 +275,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      "CAD1",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -304,7 +304,7 @@ func TestCreateTransfer(t *testing.T) {
 				Currency:      result.FromAccount.Currency,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.TransferTxParams{
@@ -389,7 +389,7 @@ func TestGetTransfers(t *testing.T) {
 				ToAccountID:   result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{
@@ -434,7 +434,7 @@ func TestGetTransfers(t *testing.T) {
 				ToAccountID:   result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{
@@ -489,7 +489,7 @@ func TestGetTransfers(t *testing.T) {
 				ToAccountID:   result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{
@@ -515,7 +515,7 @@ func TestGetTransfers(t *testing.T) {
 				ToAccountID:   result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{
@@ -547,7 +547,7 @@ func TestGetTransfers(t *testing.T) {
 				ToAccountID:   result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{
@@ -581,7 +581,7 @@ func TestGetTransfers(t *testing.T) {
 			name: "BadRequest",
 			body: req.GetTransferRequest{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.GetTransfersParams{}
@@ -651,7 +651,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 				FromAccountID: result.Transfer.FromAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.FromAccountID
@@ -687,7 +687,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 				FromAccountID: result.Transfer.FromAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.FromAccountID
@@ -735,7 +735,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 				FromAccountID: result.Transfer.FromAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.FromAccountID
@@ -758,7 +758,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 				FromAccountID: result.Transfer.FromAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.FromAccountID
@@ -784,7 +784,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 			name: "BadRequest",
 			body: req.GetFromAccountTransferRequest{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.FromAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.FromAccountID
@@ -853,7 +853,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 				ToAccountID: result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.ToAccountID
@@ -889,7 +889,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 				ToAccountID: result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.ToAccountID
@@ -937,7 +937,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 				ToAccountID: result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.ToAccountID
@@ -960,7 +960,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 				ToAccountID: result.Transfer.ToAccountID,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := result.Transfer.ToAccountID
@@ -993,7 +993,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 					Times(0)
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, result.ToAccount.Owner, util.DepositorRole, time.Minute)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {

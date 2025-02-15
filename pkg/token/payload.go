@@ -24,11 +24,12 @@ var (
 // Payload is the payload data of the token
 type Payload struct {
 	UserName string `json:"userName"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
 // NewPayload creates a new Payload instance
-func NewPayload(username string, duration time.Duration) (*Payload, error) {
+func NewPayload(username string, role string, duration time.Duration) (*Payload, error) {
 	tokenId, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -36,6 +37,7 @@ func NewPayload(username string, duration time.Duration) (*Payload, error) {
 
 	payload := &Payload{
 		UserName: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -47,6 +47,7 @@ func RandomUser(t *testing.T) (db.User, string) {
 		Username:       util.RandomOwner(),
 		FullName:       util.RandomOwner(),
 		Email:          util.RandomEmail(),
+		Role:           util.DepositorRole,
 		HashedPassword: hashedPassword,
 	}, password
 }
@@ -64,7 +65,7 @@ func RandomVerifyEmail(t *testing.T, user db.User) db.VerifyEmail {
 	}
 }
 
-func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error) {
+func (h *UserHandler) authorizeUser(ctx context.Context, accessibleRoles []string) (*token.Payload, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 
 	if !ok {
@@ -93,7 +94,21 @@ func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error)
 		return nil, fmt.Errorf("invalid access token")
 	}
 
+	if !hasPermission(payload.Role, accessibleRoles) {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	return payload, nil
+}
+
+func hasPermission(userRole string, accessibleRoles []string) bool {
+	for _, role := range accessibleRoles {
+		if userRole == role {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
@@ -186,13 +201,13 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 		}
 	}
 
-	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create access token: %v", err)
 	}
 
-	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.RefreshTokenDuration)
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create refresh token: %v", err)
@@ -235,7 +250,10 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 }
 
 func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
-	authPayload, err := h.authorizeUser(ctx)
+	authPayload, err := h.authorizeUser(ctx, []string{
+		util.DepositorRole,
+		util.BankerRole,
+	})
 
 	if err != nil {
 		return nil, myErr.UnAuthorizedError(err)
@@ -247,7 +265,7 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
-	if authPayload.UserName != req.GetUserName() {
+	if authPayload.Role != util.BankerRole && authPayload.UserName != req.GetUserName() {
 		return nil, status.Errorf(codes.PermissionDenied, "unauthorized user")
 	}
 

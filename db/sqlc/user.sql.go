@@ -15,7 +15,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO
     users (username,hashed_password,full_name,email)
-VALUES ($1, $2, $3, $4) RETURNING username, hashed_password, full_name, email, created_at, password_changed_at, is_email_verified
+VALUES ($1, $2, $3, $4) RETURNING username, hashed_password, full_name, email, created_at, password_changed_at, is_email_verified, role
 `
 
 type CreateUserParams struct {
@@ -41,6 +41,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.PasswordChangedAt,
 		&i.IsEmailVerified,
+		&i.Role,
 	)
 	return i, err
 }
@@ -49,6 +50,7 @@ const getUserByUserName = `-- name: GetUserByUserName :one
 SELECT 
     username,
     hashed_password,
+    role,
     full_name,
     email,
     is_email_verified,
@@ -63,6 +65,7 @@ WHERE
 type GetUserByUserNameRow struct {
 	Username          string    `json:"username"`
 	HashedPassword    string    `json:"hashed_password"`
+	Role              string    `json:"role"`
 	FullName          string    `json:"full_name"`
 	Email             string    `json:"email"`
 	IsEmailVerified   bool      `json:"is_email_verified"`
@@ -76,6 +79,7 @@ func (q *Queries) GetUserByUserName(ctx context.Context, username string) (GetUs
 	err := row.Scan(
 		&i.Username,
 		&i.HashedPassword,
+		&i.Role,
 		&i.FullName,
 		&i.Email,
 		&i.IsEmailVerified,
@@ -95,7 +99,7 @@ SET
     email = COALESCE($4, email)
 WHERE
     username = $5
-RETURNING username, hashed_password, full_name, email, created_at, password_changed_at, is_email_verified
+RETURNING username, hashed_password, full_name, email, created_at, password_changed_at, is_email_verified, role
 `
 
 type UpdateUserParams struct {
@@ -123,6 +127,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.CreatedAt,
 		&i.PasswordChangedAt,
 		&i.IsEmailVerified,
+		&i.Role,
 	)
 	return i, err
 }

@@ -7,6 +7,7 @@ VALUES ($1, $2, $3, $4) RETURNING *;
 SELECT 
     username,
     hashed_password,
+    role,
     full_name,
     email,
     is_email_verified,

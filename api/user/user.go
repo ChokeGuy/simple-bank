@@ -56,6 +56,7 @@ func RandomUser(t *testing.T) (db.User, string) {
 		Username:       util.RandomOwner(),
 		FullName:       util.RandomOwner(),
 		Email:          util.RandomEmail(),
+		Role:           util.DepositorRole,
 		HashedPassword: hashedPassword,
 	}, password
 }
@@ -80,7 +81,7 @@ func RandomToken(t *testing.T, userName string) string {
 	paseto, err := paseto.NewPasetoMaker(cfg.SymetricKey)
 	require.NoError(t, err)
 
-	token, _, err := paseto.CreateToken(userName, time.Hour)
+	token, _, err := paseto.CreateToken(userName, util.DepositorRole, time.Hour)
 	require.NoError(t, err)
 
 	return token
@@ -234,14 +235,14 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		}
 	}
 
-	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
 		return
 	}
 
-	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.RefreshTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -410,7 +411,7 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, payload, err := h.TokenMaker.CreateToken(claims.UserName, h.Config.AccessTokenDuration)
+	accessToken, payload, err := h.TokenMaker.CreateToken(claims.UserName, claims.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))

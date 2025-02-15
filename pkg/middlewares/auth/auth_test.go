@@ -9,6 +9,7 @@ import (
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/http"
+	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "OK",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				AddAuthorization(t, request, tokenMaker, AuthTypeBearer, "user", time.Minute)
+				AddAuthorization(t, request, tokenMaker, AuthTypeBearer, "user", util.DepositorRole, time.Minute)
 			},
 			checkResponse: func(t *testing.T, response *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, response.Code)
@@ -39,7 +40,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "UnsupportedAuthorization",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				AddAuthorization(t, request, tokenMaker, "unsupported", "user", time.Minute)
+				AddAuthorization(t, request, tokenMaker, "unsupported", "user", util.DepositorRole, time.Minute)
 			},
 			checkResponse: func(t *testing.T, response *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, response.Code)
@@ -48,7 +49,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "InvalidAuthorizationFormat",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				AddAuthorization(t, request, tokenMaker, "", "user", time.Minute)
+				AddAuthorization(t, request, tokenMaker, "", "user", util.DepositorRole, time.Minute)
 			},
 			checkResponse: func(t *testing.T, response *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, response.Code)
@@ -57,7 +58,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "ExpiredToken",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				AddAuthorization(t, request, tokenMaker, AuthTypeBearer, "user", -time.Minute)
+				AddAuthorization(t, request, tokenMaker, AuthTypeBearer, "user", util.DepositorRole, -time.Minute)
 			},
 			checkResponse: func(t *testing.T, response *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, response.Code)
