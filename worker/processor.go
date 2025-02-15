@@ -4,6 +4,7 @@ import (
 	"context"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	"github.com/ChokeGuy/simple-bank/pkg/email"
 	"github.com/ChokeGuy/simple-bank/pkg/logger"
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
@@ -22,9 +23,10 @@ type TaskProcessor interface {
 type RedisTaskProcessor struct {
 	server *asynq.Server
 	store  db.Store
+	mailer email.EmailSender
 }
 
-func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskProcessor {
+func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store, mailer email.EmailSender) TaskProcessor {
 	server := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -46,6 +48,7 @@ func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskPr
 	return &RedisTaskProcessor{
 		server: server,
 		store:  store,
+		mailer: mailer,
 	}
 }
 
@@ -59,11 +62,16 @@ func (processor *RedisTaskProcessor) Start() error {
 
 // RunTaskProcessor run redis task processor
 func RunTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
-	taskProcessor := NewRedisTaskProcessor(redisOpt, store)
+	mailer, err := email.NewSesEmailSender()
+
+	if err != nil {
+		log.Fatal().Msgf("cannot create email sender: %v", err)
+	}
+
+	taskProcessor := NewRedisTaskProcessor(redisOpt, store, mailer)
 	log.Info().Msg("start task processor")
 
-	err := taskProcessor.Start()
-	if err != nil {
+	if err := taskProcessor.Start(); err != nil {
 		log.Fatal().Err(err).Msg("fail to start task processor")
 	}
 }

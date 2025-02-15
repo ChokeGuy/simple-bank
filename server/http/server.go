@@ -22,7 +22,7 @@ type Server struct {
 	Store           db.Store
 	Router          *gin.Engine
 	TokenMaker      token.Maker
-	TaskDistributor worker.TaskDistributior
+	TaskDistributor worker.TaskDistributor
 }
 
 // NewServer creates a new HTTP server and set up routing.
@@ -30,7 +30,7 @@ func NewServer(
 	store db.Store,
 	config *pkg.Config,
 	tokenMaker token.Maker,
-	taskDistributor worker.TaskDistributior,
+	taskDistributor worker.TaskDistributor,
 ) (*Server, error) {
 
 	server := &Server{
@@ -52,7 +52,7 @@ func NewServer(
 }
 
 // NewTestServer creates a new HTTP server for testing.
-func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor worker.TaskDistributior) *Server {
+func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor worker.TaskDistributor) *Server {
 	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
 	require.NoError(t, err)
 

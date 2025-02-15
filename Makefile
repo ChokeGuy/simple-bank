@@ -13,7 +13,7 @@ dropdb:
 sqlc:
 	sqlc generate
 test:
-	go test -v -cover ./...
+	go test -v -cover -short ./...
 server:
 	go run cmd/main.go
 migratecreate:
@@ -28,6 +28,7 @@ migratedown1:
 	migrate -path db/migrations -database "$(POSTGRES_URL)" -verbose down 1
 mock:
 	mockgen -package mockdb -destination db/mock/store.go github.com/ChokeGuy/simple-bank/db/sqlc Store
+	mockgen -package mockwk -destination worker/mock/distributor.go github.com/ChokeGuy/simple-bank/worker TaskDistributor
 db_docs:
 	dbdocs build doc/db.dbml
 db_schema:

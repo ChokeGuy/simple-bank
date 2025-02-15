@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/ChokeGuy/simple-bank/consts"
@@ -13,11 +14,13 @@ import (
 	"github.com/ChokeGuy/simple-bank/pkg/errors"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
+	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/ChokeGuy/simple-bank/validations"
 	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -33,6 +36,33 @@ type UserHandler struct {
 
 func NewUserHandler(server *sv.Server) *UserHandler {
 	return &UserHandler{Server: server}
+}
+
+// Create radom user
+func RandomUser(t *testing.T) (db.User, string) {
+	password := util.RandomPassword()
+	hashedPassword, err := pw.HashPassword(password)
+	require.NoError(t, err)
+
+	return db.User{
+		Username:       util.RandomOwner(),
+		FullName:       util.RandomOwner(),
+		Email:          util.RandomEmail(),
+		HashedPassword: hashedPassword,
+	}, password
+}
+
+// Create random verify email
+func RandomVerifyEmail(t *testing.T, user db.User) db.VerifyEmail {
+	return db.VerifyEmail{
+		ID:         util.RandomInt(1, 10000),
+		Username:   user.Username,
+		Email:      user.Email,
+		IsUsed:     false,
+		SecretCode: util.RandomString(32),
+		ExpiredAt:  time.Now().Add(time.Hour),
+		CreatedAt:  time.Now(),
+	}
 }
 
 func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error) {
@@ -96,10 +126,10 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 			opts := []asynq.Option{
 				asynq.MaxRetry(10),
 				asynq.ProcessIn(10 * time.Second),
-				asynq.Queue(worker.QueueDefault),
+				asynq.Queue(worker.QueueCritical),
 			}
 
-			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+			return h.Server.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
 		},
 	}
 
@@ -253,6 +283,33 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return response, nil
 }
 
+func (h *UserHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEmailRequest) (*pb.VerifyUserEmailResponse, error) {
+	violations := validateVerifyUserEmailRequest(req)
+
+	if violations != nil {
+		return nil, errors.InvalidAgrumentError(violations)
+	}
+
+	arg := db.VerifyUserEmailTxParams{
+		EmailId:    req.GetEmailId(),
+		SecretCode: req.GetSecretCode(),
+	}
+
+	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Errorf(codes.NotFound, "email verification not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get email verification: %v", err)
+	}
+
+	response := &pb.VerifyUserEmailResponse{
+		IsVerified: verifyEmail.User.IsEmailVerified,
+	}
+
+	return response, nil
+}
 func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
 		violations = append(violations, errors.FieldViolation("userName", err))
@@ -300,6 +357,18 @@ func validateUpdateUserRequest(req *pb.UpdateUserRequest) (violations []*errdeta
 		if err := validations.ValidateEmail(req.GetEmail()); err != nil {
 			violations = append(violations, errors.FieldViolation("email", err))
 		}
+	}
+
+	return violations
+}
+
+func validateVerifyUserEmailRequest(req *pb.VerifyUserEmailRequest) (violations []*errdetails.BadRequest_FieldViolation) {
+	if err := validations.ValidateEmailId(req.GetEmailId()); err != nil {
+		violations = append(violations, errors.FieldViolation("emailId", err))
+	}
+
+	if err := validations.ValidateSecretCode(req.GetSecretCode()); err != nil {
+		violations = append(violations, errors.FieldViolation("secretCode", err))
 	}
 
 	return violations

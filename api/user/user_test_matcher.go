@@ -6,42 +6,62 @@ import (
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/golang/mock/gomock"
 )
 
-type eqCreateUserParamsMatcher struct {
-	arg      db.CreateUserParams
+type eqCreateUserTxParamsMatcher struct {
+	arg      db.CreateUserTxParams
 	password string
+	user     db.User
 }
 
-func (e eqCreateUserParamsMatcher) Matches(x interface{}) bool {
-	arg, ok := x.(db.CreateUserParams)
+func (e eqCreateUserTxParamsMatcher) Matches(x interface{}) bool {
+	actualArg, ok := x.(db.CreateUserTxParams)
 	if !ok {
 		return false
 	}
 
-	err := password.CheckPassword(e.password, arg.HashedPassword)
+	err := password.CheckPassword(e.password, actualArg.HashedPassword)
 	if err != nil {
 		return false
 	}
 
-	e.arg.HashedPassword = arg.HashedPassword
-	// Check if types assignable and convert them to common type
-	x1Val := reflect.ValueOf(e.arg)
-	x2Val := reflect.ValueOf(arg)
+	e.arg.HashedPassword = actualArg.HashedPassword
 
-	if x1Val.Type().AssignableTo(x2Val.Type()) {
-		x1ValConverted := x1Val.Convert(x2Val.Type())
-		return reflect.DeepEqual(x1ValConverted.Interface(), x2Val.Interface())
+	if !reflect.DeepEqual(e.arg.CreateUserParams, actualArg.CreateUserParams) {
+		return false
 	}
 
-	return reflect.DeepEqual(e.arg, arg)
+	actualArg.AfterCreate(e.user)
+	return true
 }
 
-func (e eqCreateUserParamsMatcher) String() string {
+func (e eqCreateUserTxParamsMatcher) String() string {
 	return fmt.Sprintf("matches arg %v and password %v", e.arg, e.password)
 }
 
-func EqCreateUserParams(arg db.CreateUserParams, password string) gomock.Matcher {
-	return eqCreateUserParamsMatcher{arg, password}
+func EqCreateUserTxParams(arg db.CreateUserTxParams, password string, user db.User) gomock.Matcher {
+	return eqCreateUserTxParamsMatcher{arg, password, user}
+}
+
+// Custom matcher for PayloadSendVerifyEmail
+type eqPayloadSendVerifyEmailMatcher struct {
+	expected *worker.PayloadSendVerifyEmail
+}
+
+func (e eqPayloadSendVerifyEmailMatcher) Matches(x interface{}) bool {
+	actual, ok := x.(*worker.PayloadSendVerifyEmail)
+	if !ok {
+		return false
+	}
+	return actual.UserName == e.expected.UserName
+}
+
+func (e eqPayloadSendVerifyEmailMatcher) String() string {
+	return "matches payload send verify email"
+}
+
+func EqPayloadSendVerifyEmail(expected *worker.PayloadSendVerifyEmail) gomock.Matcher {
+	return eqPayloadSendVerifyEmailMatcher{expected}
 }

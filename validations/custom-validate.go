@@ -79,3 +79,17 @@ func ValidateFullName(fullname string) error {
 	}
 	return nil
 }
+
+func ValidateEmailId(emailId int64) error {
+	if emailId <= 0 {
+		return fmt.Errorf("emailId must be a positive number")
+	}
+	return nil
+}
+
+func ValidateSecretCode(secretCode string) error {
+	if len(secretCode) <= 0 {
+		return fmt.Errorf("secretCode must be a positive number")
+	}
+	return nil
+}

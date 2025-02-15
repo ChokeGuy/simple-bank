@@ -29,3 +29,7 @@ type RefreshTokenResponse struct {
 	AccessToken          string    `json:"accessToken"`
 	AccessTokenExpiresAt time.Time `json:"accessTokenExpiresAt"`
 }
+
+type VerifyUserEmailResponse struct {
+	IsVerified bool `json:"isVerified"`
+}

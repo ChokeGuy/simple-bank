@@ -8,6 +8,7 @@ import "rpc_create_user.proto";
 import "rpc_login_user.proto";
 import "rpc_get_list_account.proto";
 import "rpc_update_user.proto";
+import "rpc_verify_email.proto";
 
 option go_package = "github.com/ChokeGuy/simple-bank/pb";
 
@@ -53,6 +54,16 @@ service SimpleBank {
         option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
             description: "API for login user"
             summary: "Login user"
+        };
+    };
+
+    rpc VerifyUserEmail(VerifyUserEmailRequest) returns (VerifyUserEmailResponse){
+        option (google.api.http) = {
+            get: "/user/verify-email"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            description: "API for verify user email"
+            summary: "Verify email"
         };
     };
 

@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	"github.com/ChokeGuy/simple-bank/pkg/email"
+	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
 )
@@ -17,7 +20,7 @@ type PayloadSendVerifyEmail struct {
 	UserName string `json:"username"`
 }
 
-func (distributor *RedisTaskDistributior) DistributeTaskSendVerifyEmail(
+func (distributor *RedisTaskDistributor) DistributeTaskSendVerifyEmail(
 	ctx context.Context,
 	payload *PayloadSendVerifyEmail,
 	opts ...asynq.Option,
@@ -61,7 +64,33 @@ func (processor *RedisTaskProcessor) ProcessTaskSendVerifyEmail(ctx context.Cont
 		return fmt.Errorf("fail to get user: %w", err)
 	}
 
-	//TODO: send email to user
+	arg := db.CreateVerifyEmailParams{
+		Username:   user.Username,
+		Email:      user.Email,
+		SecretCode: util.RandomString(32),
+	}
+	verifyEmail, err := processor.store.CreateVerifyEmail(ctx, arg)
+
+	if err != nil {
+		return fmt.Errorf("fail to create verify email: %w", err)
+	}
+
+	verifyUrl := fmt.Sprintf("http://localhost:8080/user/verify-email?emailId=%d&secretCode=%s", verifyEmail.ID, verifyEmail.SecretCode)
+	receivers := []string{user.Email}
+
+	emailPayload := email.EmailPayload{
+		Subject: "Welcome to Simple Bank",
+		Content: fmt.Sprintf(`Hello %s, <br/>
+		Thank you for registering an account with us!<br/>
+		Please <a href="%s">click here</a> to verify your email address.<br/>
+		`, user.Username, verifyUrl),
+		To: receivers,
+	}
+
+	if err := processor.mailer.SendEmail(emailPayload); err != nil {
+		return fmt.Errorf("fail to send email: %w", err)
+	}
+
 	log.Info().
 		Str("type", task.Type()).
 		Bytes("payload", task.Payload()).

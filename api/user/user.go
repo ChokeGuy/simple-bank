@@ -40,6 +40,7 @@ func (h *UserHandler) MapRoutes() {
 	router.POST("/auth/login", h.loginUser)
 	router.POST("/auth/refresh-token", h.refreshNewToken)
 	router.GET("/user", h.getUserByUserName)
+	router.GET("/user/verify-email", h.verifyUserEmail)
 
 	authRoutes := router.Group("/").Use(auth.AuthMiddleWare(h.TokenMaker))
 	authRoutes.PATCH("/user/update", h.updateUser)
@@ -57,6 +58,19 @@ func RandomUser(t *testing.T) (db.User, string) {
 		Email:          util.RandomEmail(),
 		HashedPassword: hashedPassword,
 	}, password
+}
+
+// Create random verify email
+func RandomVerifyEmail(t *testing.T, user db.User) db.VerifyEmail {
+	return db.VerifyEmail{
+		ID:         util.RandomInt(1, 10000),
+		Username:   user.Username,
+		Email:      user.Email,
+		IsUsed:     false,
+		SecretCode: util.RandomString(32),
+		ExpiredAt:  time.Now().Add(time.Hour),
+		CreatedAt:  time.Now(),
+	}
 }
 
 func RandomToken(t *testing.T, userName string) string {
@@ -199,7 +213,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	}
 
 	if err := pw.CheckPassword(req.Password, user.HashedPassword); err != nil {
-		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid password"))
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, "Invalid password"))
 		return
 	}
 
@@ -320,6 +334,37 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User updated successfully"))
+}
+
+func (h *UserHandler) verifyUserEmail(ctx *gin.Context) {
+	var req dto.VerifyUserEmailRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	arg := db.VerifyUserEmailTxParams{
+		EmailId:    req.EmailId,
+		SecretCode: req.SecretCode,
+	}
+
+	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Email verification not found"))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	response := dto.VerifyUserEmailResponse{
+		IsVerified: verifyEmail.User.IsEmailVerified,
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "Email verified successfully"))
 }
 
 func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
