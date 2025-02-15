@@ -7,6 +7,10 @@ import (
 )
 
 func TestAwsSendEmailWithGmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip test in short mode")
+	}
+
 	// Create a new Gmail sender
 	sender, err := NewSesEmailSender()
 	require.NoError(t, err)
