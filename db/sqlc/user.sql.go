@@ -7,8 +7,9 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -25,7 +26,7 @@ type CreateUserParams struct {
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser,
+	row := q.db.QueryRow(ctx, createUser,
 		arg.Username,
 		arg.HashedPassword,
 		arg.FullName,
@@ -70,7 +71,7 @@ type GetUserByUserNameRow struct {
 }
 
 func (q *Queries) GetUserByUserName(ctx context.Context, username string) (GetUserByUserNameRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUserName, username)
+	row := q.db.QueryRow(ctx, getUserByUserName, username)
 	var i GetUserByUserNameRow
 	err := row.Scan(
 		&i.Username,
@@ -98,15 +99,15 @@ RETURNING username, hashed_password, full_name, email, created_at, password_chan
 `
 
 type UpdateUserParams struct {
-	HashedPassword  sql.NullString `json:"hashed_password"`
-	IsEmailVerified sql.NullBool   `json:"is_email_verified"`
-	FullName        sql.NullString `json:"full_name"`
-	Email           sql.NullString `json:"email"`
-	Username        string         `json:"username"`
+	HashedPassword  pgtype.Text `json:"hashed_password"`
+	IsEmailVerified pgtype.Bool `json:"is_email_verified"`
+	FullName        pgtype.Text `json:"full_name"`
+	Email           pgtype.Text `json:"email"`
+	Username        string      `json:"username"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUser,
+	row := q.db.QueryRow(ctx, updateUser,
 		arg.HashedPassword,
 		arg.IsEmailVerified,
 		arg.FullName,

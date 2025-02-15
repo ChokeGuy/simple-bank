@@ -1,7 +1,7 @@
 package user
 
 import (
-	"database/sql"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -19,7 +19,7 @@ import (
 	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 
 	"github.com/gin-gonic/gin"
@@ -140,12 +140,9 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			switch pqErr.Code.Name() {
-			case "unique_violation":
-				ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, pqErr.Message))
-				return
-			}
+		if errCode := db.ErrorCode(err); errCode == db.UniqueViolation {
+			ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, err.Error()))
+			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -174,7 +171,7 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -204,7 +201,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -297,7 +294,7 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -314,8 +311,8 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 
 	arg := db.UpdateUserParams{
 		Username: req.UserName,
-		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
-		Email:    sql.NullString{String: req.Email, Valid: req.Email != ""},
+		FullName: pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
+		Email:    pgtype.Text{String: req.Email, Valid: req.Email != ""},
 	}
 
 	updateUser, err := h.Store.UpdateUser(ctx, arg)
@@ -352,7 +349,7 @@ func (h *UserHandler) verifyUserEmail(ctx *gin.Context) {
 	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Email verification not found"))
 			return
 		}
@@ -385,7 +382,7 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 	session, err := h.Store.GetSessionById(ctx, uuid.MustParse(claims.ID))
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Session not found"))
 			return
 		}

@@ -196,7 +196,7 @@ func TestCreateTransfer(t *testing.T) {
 
 				store.EXPECT().GetAccount(gomock.Any(), gomock.Eq(arg.FromAccountID)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {
@@ -228,7 +228,7 @@ func TestCreateTransfer(t *testing.T) {
 
 				store.EXPECT().GetAccount(gomock.Any(), gomock.Eq(arg.ToAccountID)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {
@@ -499,7 +499,7 @@ func TestGetTransfers(t *testing.T) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(arg.FromAccountID)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {
@@ -531,7 +531,7 @@ func TestGetTransfers(t *testing.T) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(arg.ToAccountID)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {
@@ -743,7 +743,7 @@ func TestGetFromAccountTransfers(t *testing.T) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {
@@ -945,7 +945,7 @@ func TestGetToAccountTransfers(t *testing.T) {
 				store.EXPECT().
 					GetAccount(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
-					Return(db.Account{}, sql.ErrNoRows)
+					Return(db.Account{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				if recorder.Code != http.StatusOK {

@@ -2,7 +2,8 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // VerifyUserEmailTxParams contains the input parameters of the transfer transaction
@@ -35,7 +36,7 @@ func (store *SQLStore) VerifyUserEmailTx(ctx context.Context, arg VerifyUserEmai
 
 		result.User, err = q.UpdateUser(ctx, UpdateUserParams{
 			Username: result.VerifyEmail.Username,
-			IsEmailVerified: sql.NullBool{
+			IsEmailVerified: pgtype.Bool{
 				Bool:  true,
 				Valid: true,
 			},

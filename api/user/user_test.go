@@ -23,6 +23,7 @@ import (
 	mockwk "github.com/ChokeGuy/simple-bank/worker/mock"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +64,7 @@ func TestGetUserByUserNameApi(t *testing.T) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -293,7 +294,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -469,7 +470,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -540,7 +541,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -721,7 +722,7 @@ func TestRefreshTokenApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionById(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetSessionByIdRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByIdRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -858,7 +859,7 @@ func TestUpdateUserApi(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					FullName: sql.NullString{String: user.FullName, Valid: user.FullName != ""},
+					FullName: pgtype.Text{String: user.FullName, Valid: user.FullName != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
@@ -893,7 +894,7 @@ func TestUpdateUserApi(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					Email:    sql.NullString{String: user.Email, Valid: user.Email != ""},
+					Email:    pgtype.Text{String: user.Email, Valid: user.Email != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
@@ -929,8 +930,8 @@ func TestUpdateUserApi(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					Email:    sql.NullString{String: user.Email, Valid: user.Email != ""},
-					FullName: sql.NullString{String: user.FullName, Valid: user.FullName != ""},
+					Email:    pgtype.Text{String: user.Email, Valid: user.Email != ""},
+					FullName: pgtype.Text{String: user.FullName, Valid: user.FullName != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
@@ -962,7 +963,7 @@ func TestUpdateUserApi(t *testing.T) {
 				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.FullName, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -1168,7 +1169,7 @@ func TestVerifyUserEmailApi(t *testing.T) {
 				store.EXPECT().
 					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.VerifyUserEmailTxResult{}, sql.ErrNoRows)
+					Return(db.VerifyUserEmailTxResult{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)

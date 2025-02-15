@@ -19,6 +19,7 @@ import (
 	mockwk "github.com/ChokeGuy/simple-bank/worker/mock"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -131,6 +132,30 @@ func TestCreateUserApi(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, codes.InvalidArgument, st.Code())
 			},
+		}, {
+			name: "DuplicateUsername",
+			body: &pb.CreateUserRequest{
+				UserName: user.Username,
+				FullName: user.FullName,
+				Password: password,
+				Email:    user.Email,
+			},
+			buildStubs: func(store *mockdb.MockStore, taskDistributor *mockwk.MockTaskDistributor) {
+				store.EXPECT().
+					CreateUserTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.CreateUserTxResult{}, db.ErrUniqueViolation)
+
+				taskDistributor.EXPECT().
+					DistributeTaskSendVerifyEmail(gomock.Any(), gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, res *pb.CreateUserResponse, err error) {
+				require.Error(t, err)
+				st, ok := status.FromError(err)
+				require.True(t, ok)
+				require.Equal(t, codes.AlreadyExists, st.Code())
+			},
 		},
 	}
 
@@ -195,7 +220,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -245,7 +270,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -312,7 +337,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Any()).
@@ -596,11 +621,11 @@ func TestUpdateUserApi(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					FullName: sql.NullString{
+					FullName: pgtype.Text{
 						String: user.FullName,
 						Valid:  true,
 					},
-					Email: sql.NullString{
+					Email: pgtype.Text{
 						String: user.Email,
 						Valid:  true,
 					},
@@ -744,11 +769,11 @@ func TestUpdateUserApi(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					FullName: sql.NullString{
+					FullName: pgtype.Text{
 						String: user.FullName,
 						Valid:  true,
 					},
-					Email: sql.NullString{
+					Email: pgtype.Text{
 						String: user.Email,
 						Valid:  true,
 					},
@@ -757,7 +782,7 @@ func TestUpdateUserApi(t *testing.T) {
 				store.EXPECT().
 					UpdateUser(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
-					Return(db.User{}, sql.ErrNoRows)
+					Return(db.User{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, res *pb.UpdateUserResponse, err error) {
 				require.Error(t, err)
@@ -924,7 +949,7 @@ func TestVerifyUserEmailApi(t *testing.T) {
 				store.EXPECT().
 					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.VerifyUserEmailTxResult{}, sql.ErrNoRows)
+					Return(db.VerifyUserEmailTxResult{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *pb.VerifyUserEmailResponse, err error) {
 				require.Error(t, err)

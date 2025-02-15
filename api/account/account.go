@@ -1,7 +1,7 @@
 package account
 
 import (
-	"database/sql"
+	"errors"
 	"net/http"
 
 	dto "github.com/ChokeGuy/simple-bank/api/account/dto"
@@ -11,7 +11,6 @@ import (
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
-	"github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,12 +62,10 @@ func (h *AccountHandler) createAccount(ctx *gin.Context) {
 	account, err := h.Store.CreateAccount(ctx, arg)
 
 	if err != nil {
-		if pErr, ok := err.(*pq.Error); ok {
-			switch pErr.Code.Name() {
-			case "foreign_key_violation", "unique_violation":
-				ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, pErr.Message))
-				return
-			}
+		errCode := db.ErrorCode(err)
+		if errCode == db.ForeignKeyViolation || errCode == db.UniqueViolation {
+			ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, err.Error()))
+			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -89,7 +86,7 @@ func (h *AccountHandler) getAccount(ctx *gin.Context) {
 	account, err := h.Store.GetAccount(ctx, req.ID)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Account not found"))
 			return
 		}
@@ -149,7 +146,7 @@ func (h *AccountHandler) deleteAccount(ctx *gin.Context) {
 	account, err := h.Store.GetAccount(ctx, req.ID)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Account not found"))
 			return
 		}

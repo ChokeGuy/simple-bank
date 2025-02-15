@@ -2,7 +2,7 @@ package user
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -11,7 +11,7 @@ import (
 	"github.com/ChokeGuy/simple-bank/consts"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/pb"
-	"github.com/ChokeGuy/simple-bank/pkg/errors"
+	myErr "github.com/ChokeGuy/simple-bank/pkg/errors"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
 	"github.com/ChokeGuy/simple-bank/util"
@@ -20,14 +20,13 @@ import (
 	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
-	"github.com/lib/pq"
 )
 
 type UserHandler struct {
@@ -101,7 +100,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 	violations := validateCreateUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	hashedPassword, err := pw.HashPassword(req.GetPassword())
@@ -126,21 +125,18 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 			opts := []asynq.Option{
 				asynq.MaxRetry(10),
 				asynq.ProcessIn(10 * time.Second),
-				asynq.Queue(worker.QueueCritical),
+				asynq.Queue(worker.QueueDefault),
 			}
 
-			return h.Server.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
 		},
 	}
 
 	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			switch pqErr.Code.Name() {
-			case "unique_violation":
-				return nil, status.Errorf(codes.AlreadyExists, "user already exists: %v", err)
-			}
+		if db.ErrorCode(err) == db.UniqueViolation {
+			return nil, status.Errorf(codes.AlreadyExists, "%s", err.Error())
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
@@ -156,13 +152,13 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 	violations := validateLoginUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	user, err := h.Store.GetUserByUserName(ctx, req.GetUserName())
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user not found")
 		}
 
@@ -242,13 +238,13 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	authPayload, err := h.authorizeUser(ctx)
 
 	if err != nil {
-		return nil, errors.UnAuthorizedError(err)
+		return nil, myErr.UnAuthorizedError(err)
 	}
 
 	violations := validateUpdateUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	if authPayload.UserName != req.GetUserName() {
@@ -257,11 +253,11 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 
 	arg := db.UpdateUserParams{
 		Username: req.GetUserName(),
-		FullName: sql.NullString{
+		FullName: pgtype.Text{
 			String: req.GetFullName(),
 			Valid:  req.FullName != nil,
 		},
-		Email: sql.NullString{
+		Email: pgtype.Text{
 			String: req.GetEmail(),
 			Valid:  req.Email != nil,
 		},
@@ -270,7 +266,7 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	user, err := h.Store.UpdateUser(ctx, arg)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user not found")
 		}
 
@@ -287,7 +283,7 @@ func (h *UserHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEma
 	violations := validateVerifyUserEmailRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	arg := db.VerifyUserEmailTxParams{
@@ -298,7 +294,7 @@ func (h *UserHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEma
 	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "email verification not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get email verification: %v", err)
@@ -312,19 +308,19 @@ func (h *UserHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEma
 }
 func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
-		violations = append(violations, errors.FieldViolation("password", err))
+		violations = append(violations, myErr.FieldViolation("password", err))
 	}
 
 	if err := validations.ValidateFullName(req.GetFullName()); err != nil {
-		violations = append(violations, errors.FieldViolation("fullName", err))
+		violations = append(violations, myErr.FieldViolation("fullName", err))
 	}
 
 	if err := validations.ValidateEmail(req.GetEmail()); err != nil {
-		violations = append(violations, errors.FieldViolation("email", err))
+		violations = append(violations, myErr.FieldViolation("email", err))
 	}
 
 	return violations
@@ -332,11 +328,11 @@ func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdeta
 
 func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
-		violations = append(violations, errors.FieldViolation("password", err))
+		violations = append(violations, myErr.FieldViolation("password", err))
 	}
 
 	return violations
@@ -344,18 +340,18 @@ func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetail
 
 func validateUpdateUserRequest(req *pb.UpdateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if req.FullName != nil {
 		if err := validations.ValidateFullName(req.GetFullName()); err != nil {
-			violations = append(violations, errors.FieldViolation("fullName", err))
+			violations = append(violations, myErr.FieldViolation("fullName", err))
 		}
 	}
 
 	if req.Email != nil {
 		if err := validations.ValidateEmail(req.GetEmail()); err != nil {
-			violations = append(violations, errors.FieldViolation("email", err))
+			violations = append(violations, myErr.FieldViolation("email", err))
 		}
 	}
 
@@ -364,11 +360,11 @@ func validateUpdateUserRequest(req *pb.UpdateUserRequest) (violations []*errdeta
 
 func validateVerifyUserEmailRequest(req *pb.VerifyUserEmailRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateEmailId(req.GetEmailId()); err != nil {
-		violations = append(violations, errors.FieldViolation("emailId", err))
+		violations = append(violations, myErr.FieldViolation("emailId", err))
 	}
 
 	if err := validations.ValidateSecretCode(req.GetSecretCode()); err != nil {
-		violations = append(violations, errors.FieldViolation("secretCode", err))
+		violations = append(violations, myErr.FieldViolation("secretCode", err))
 	}
 
 	return violations

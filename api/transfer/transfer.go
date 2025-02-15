@@ -1,7 +1,7 @@
 package transfer
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -163,7 +163,7 @@ func (h *TransferHandler) getToAccountTransfers(ctx *gin.Context) {
 
 func (h *TransferHandler) getValidAccount(ctx *gin.Context, id int64) (db.Account, int, error) {
 	account, err := h.Store.GetAccount(ctx, id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, db.ErrRecordNotFound) {
 		return db.Account{}, http.StatusBadRequest, fmt.Errorf("account with id %d not found", id)
 	}
 
