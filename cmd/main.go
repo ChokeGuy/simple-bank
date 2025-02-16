@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/rakyll/statik/fs"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -74,10 +74,10 @@ func main() {
 
 	redisOpt := asynq.RedisClientOpt{
 		Addr: cf.RedisAddress,
-		TLSConfig: &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true,
-		},
+		// TLSConfig: &tls.Config{
+		// 	MinVersion:         tls.VersionTLS12,
+		// 	InsecureSkipVerify: true,
+		// },
 		DialTimeout:  10 * time.Second,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -104,15 +104,37 @@ func setUpRouter(server *httpSv.Server) {
 		ctx.JSON(http.StatusOK, "Welcome to Simple Bank")
 	})
 
+	// Setup CORS
+	corsConfig := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Origin", "Content-Type", "Authorization"},
+		ExposedHeaders:   []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           int(12 * time.Hour / time.Second),
+	})
+	server.Router.Use(func(c *gin.Context) {
+		corsConfig.HandlerFunc(c.Writer, c.Request)
+		c.Next()
+	})
+
+	// Map all routes
+	mapAPIRoutes(server)
+}
+
+// mapAPIRoutes maps all API routes
+func mapAPIRoutes(server *httpSv.Server) {
+	// User routes
 	userHandler := user.NewUserHandler(server)
 	userHandler.MapRoutes()
 
-	tranferHandler := transfer.NewTransferHandler(server)
-	tranferHandler.MapRoutes()
+	// Transfer routes
+	transferHandler := transfer.NewTransferHandler(server)
+	transferHandler.MapRoutes()
 
+	// Account routes
 	accountHandler := account.NewAccountHandler(server)
 	accountHandler.MapRoutes()
-
 }
 
 // runHttpServer run http server
