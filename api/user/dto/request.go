@@ -25,3 +25,8 @@ type UpdateUserRequest struct {
 	FullName string `json:"fullName" binding:"omitempty,min=3,max=100"`
 	Email    string `json:"email" binding:"omitempty,email"`
 }
+
+type VerifyUserEmailRequest struct {
+	EmailId    int64  `form:"emailId" binding:"required"`
+	SecretCode string `form:"secretCode" binding:"required"`
+}

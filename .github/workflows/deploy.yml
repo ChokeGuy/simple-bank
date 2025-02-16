@@ -59,10 +59,6 @@ jobs:
 
       # - name: Update kubectl configuration
       #   run: aws eks --region us-east-1 update-kubeconfig --name simple-bank-2
-
-      # - name: Configure kubectl
-      #   run: |
-      #     kubectl config use-context arn:aws:eks:us-east-1:058264480744:cluster/simple-bank-2
           
       # - name: Deploy image to Amazon EKS
       #   run: |
@@ -70,7 +66,9 @@ jobs:
       #     kubectl apply -f eks/service.yaml
       #     kubectl apply -f eks/issuer.yaml
       #     kubectl apply -f eks/ingress-controller.yaml
-      #     kubectl apply -f eks/ingress.yaml
+      #     kubectl apply -f eks/ingress-nginx.yaml
+      #     kubectl apply -f eks/ingress-http.yaml
+      #     kubectl apply -f eks/ingress-grpc.yaml
       
       - name: Deploy image to to EC2
         env:

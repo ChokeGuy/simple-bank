@@ -19,7 +19,7 @@ func CreateRandomTransfer(t *testing.T) Transfer {
 		Amount:        util.RandomMoney(),
 	}
 
-	transfer, err := testQueries.CreateTransfer(context.Background(), arg)
+	transfer, err := testStore.CreateTransfer(context.Background(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, transfer)
 
@@ -40,7 +40,7 @@ func CreateTransfer(t *testing.T, transfer Transfer) Transfer {
 		Amount:        util.RandomMoney(),
 	}
 
-	transfer, err := testQueries.CreateTransfer(context.Background(), arg)
+	transfer, err := testStore.CreateTransfer(context.Background(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, transfer)
 
@@ -70,7 +70,7 @@ func TestGetTransfers(t *testing.T) {
 		ToAccountID:   transfer.ToAccountID,
 	}
 
-	transfers, err := testQueries.GetTransfers(context.Background(), arg)
+	transfers, err := testStore.GetTransfers(context.Background(), arg)
 	require.NoError(t, err)
 	require.Len(t, transfers, 11)
 
@@ -84,7 +84,7 @@ func TestGetTransfers(t *testing.T) {
 func TestGetTransfer(t *testing.T) {
 	transfer1 := CreateRandomTransfer(t)
 
-	transfer2, err := testQueries.GetTransfer(context.Background(), transfer1.ID)
+	transfer2, err := testStore.GetTransfer(context.Background(), transfer1.ID)
 
 	require.NoError(t, err)
 	require.NotEmpty(t, transfer2)
@@ -103,7 +103,7 @@ func TestGetTransfersByFromAccountId(t *testing.T) {
 		CreateTransfer(t, transfer)
 	}
 
-	transfers, err := testQueries.GetTransfersByFromAccountId(context.Background(), transfer.FromAccountID)
+	transfers, err := testStore.GetTransfersByFromAccountId(context.Background(), transfer.FromAccountID)
 
 	require.NoError(t, err)
 	require.Len(t, transfers, 11)
@@ -121,7 +121,7 @@ func TestGetTransfersByToAccountId(t *testing.T) {
 		CreateTransfer(t, transfer)
 	}
 
-	transfers, err := testQueries.GetTransfersByToAccountId(context.Background(), transfer.ToAccountID)
+	transfers, err := testStore.GetTransfersByToAccountId(context.Background(), transfer.ToAccountID)
 
 	require.NoError(t, err)
 	require.Len(t, transfers, 11)

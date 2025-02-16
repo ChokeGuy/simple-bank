@@ -39,8 +39,6 @@ jobs:
           go-version: ^1.20
         id: go
       
-      # - name: Load secrets and save to .env on aws secrets manager
-      #   run: aws secretsmanager get-secret-value --secret-id simple_bank --query SecretString --output text | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]' > .env
       - name: Load secrets and save to .env on github secrets
         run: |
           echo "POSTGRES_USER=${{secrets.POSTGRES_USER}}" >> .env
@@ -68,6 +66,9 @@ jobs:
         
       - name: Run migration
         run: make migrateup
+      
+      - name: Run redis
+        run: make redis
 
       - name: Run tests
         run: make test

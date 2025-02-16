@@ -13,14 +13,17 @@ import (
 
 	req "github.com/ChokeGuy/simple-bank/api/user/dto"
 	mockdb "github.com/ChokeGuy/simple-bank/db/mock"
-	"github.com/ChokeGuy/simple-bank/db/sqlc"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/middlewares/auth"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	server "github.com/ChokeGuy/simple-bank/server/http"
+	"github.com/ChokeGuy/simple-bank/util"
+	"github.com/ChokeGuy/simple-bank/worker"
+	mockwk "github.com/ChokeGuy/simple-bank/worker/mock"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,7 +64,7 @@ func TestGetUserByUserNameApi(t *testing.T) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -109,7 +112,7 @@ func TestGetUserByUserNameApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
@@ -134,7 +137,7 @@ func TestCreateUserApi(t *testing.T) {
 	testCases := []struct {
 		name          string
 		body          req.CreateUserRequest
-		buildStubs    func(store *mockdb.MockStore)
+		buildStubs    func(store *mockdb.MockStore, taskDistributor *mockwk.MockTaskDistributor)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
 		{
@@ -145,18 +148,34 @@ func TestCreateUserApi(t *testing.T) {
 				Password: password,
 				Email:    user.Email,
 			},
-			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
+			buildStubs: func(store *mockdb.MockStore, taskDistributor *mockwk.MockTaskDistributor) {
+				arg := db.CreateUserTxParams{
+					CreateUserParams: db.CreateUserParams{
+						Username:       user.Username,
+						FullName:       user.FullName,
+						HashedPassword: user.HashedPassword,
+						Email:          user.Email,
+					},
 				}
 
 				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
+					CreateUserTx(gomock.Any(), EqCreateUserTxParams(arg, password, user)).
 					Times(1).
-					Return(user, nil)
+					Return(db.CreateUserTxResult{User: user}, nil)
+
+				//Send verification email to user
+				taskPayload := &worker.PayloadSendVerifyEmail{
+					UserName: user.Username,
+				}
+
+				taskDistributor.EXPECT().
+					DistributeTaskSendVerifyEmail(
+						gomock.Any(),
+						EqPayloadSendVerifyEmail(taskPayload),
+						gomock.Any(),
+					).
+					Times(1).
+					Return(nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -171,43 +190,19 @@ func TestCreateUserApi(t *testing.T) {
 				Password: password,
 				Email:    user.Email,
 			},
-			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
-				}
-
+			buildStubs: func(store *mockdb.MockStore, taskDistributor *mockwk.MockTaskDistributor) {
 				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
+					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.User{}, sql.ErrConnDone)
-			},
-			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name: "InternalError",
-			body: req.CreateUserRequest{
-				UserName: user.Username,
-				FullName: user.FullName,
-				Password: password,
-				Email:    user.Email,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				arg := db.CreateUserParams{
-					Username:       user.Username,
-					FullName:       user.FullName,
-					HashedPassword: user.HashedPassword,
-					Email:          user.Email,
-				}
+					Return(db.CreateUserTxResult{}, sql.ErrConnDone)
 
-				store.EXPECT().
-					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
-					Times(1).
-					Return(db.User{}, sql.ErrConnDone)
+				taskDistributor.EXPECT().
+					DistributeTaskSendVerifyEmail(
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).Times(0)
+
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -216,10 +211,13 @@ func TestCreateUserApi(t *testing.T) {
 		{
 			name: "BadRequest",
 			body: req.CreateUserRequest{},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					CreateUser(gomock.Any(), gomock.Any()).
-					Times(0)
+			buildStubs: func(store *mockdb.MockStore, taskDistributor *mockwk.MockTaskDistributor) {
+				taskDistributor.EXPECT().
+					DistributeTaskSendVerifyEmail(
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).Times(0)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -231,18 +229,22 @@ func TestCreateUserApi(t *testing.T) {
 		tc := testCases[i]
 
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+			storeCtrl := gomock.NewController(t)
+			defer storeCtrl.Finish()
 
-			store := mockdb.NewMockStore(ctrl)
+			store := mockdb.NewMockStore(storeCtrl)
+
+			taskCtrl := gomock.NewController(t)
+			defer taskCtrl.Finish()
+
+			taskDistributor := mockwk.NewMockTaskDistributor(taskCtrl)
 			//build stubs
-			tc.buildStubs(store)
-
+			tc.buildStubs(store, taskDistributor)
 			//start new server
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, taskDistributor)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -292,7 +294,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -468,7 +470,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -478,11 +480,23 @@ func TestLoginUserApi(t *testing.T) {
 			name: "IncorrectPassword",
 			body: req.LoginUserRequest{
 				UserName: user.Username,
-				Password: "incorrect",
+				Password: util.RandomPassword(),
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
+					Times(1).
+					Return(db.GetUserByUserNameRow{
+						Username:       user.Username,
+						HashedPassword: user.HashedPassword,
+					}, nil)
+
+				store.EXPECT().
+					GetSessionByUserName(gomock.Any(), gomock.Any()).
+					Times(0)
+
+				store.EXPECT().
+					CreateSession(gomock.Any(), gomock.Any()).
 					Times(0)
 
 			},
@@ -527,7 +541,7 @@ func TestLoginUserApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(db.GetSessionByUserNameRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByUserNameRow{}, db.ErrRecordNotFound)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -553,7 +567,7 @@ func TestLoginUserApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -708,7 +722,7 @@ func TestRefreshTokenApi(t *testing.T) {
 				store.EXPECT().
 					GetSessionById(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetSessionByIdRow{}, sql.ErrNoRows)
+					Return(db.GetSessionByIdRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -804,7 +818,7 @@ func TestRefreshTokenApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -840,17 +854,17 @@ func TestUpdateUserApi(t *testing.T) {
 				FullName: user.FullName,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					FullName: sql.NullString{String: user.FullName, Valid: user.FullName != ""},
+					FullName: pgtype.Text{String: user.FullName, Valid: user.FullName != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,
@@ -875,17 +889,17 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					Email:    sql.NullString{String: user.Email, Valid: user.Email != ""},
+					Email:    pgtype.Text{String: user.Email, Valid: user.Email != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,
@@ -911,18 +925,18 @@ func TestUpdateUserApi(t *testing.T) {
 				FullName: user.FullName,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.UpdateUserParams{
 					Username: user.Username,
-					Email:    sql.NullString{String: user.Email, Valid: user.Email != ""},
-					FullName: sql.NullString{String: user.FullName, Valid: user.FullName != ""},
+					Email:    pgtype.Text{String: user.Email, Valid: user.Email != ""},
+					FullName: pgtype.Text{String: user.FullName, Valid: user.FullName != ""},
 				}
 
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
-					Return(sqlc.GetUserByUserNameRow{
+					Return(db.GetUserByUserNameRow{
 						Username:          user.Username,
 						FullName:          user.FullName,
 						Email:             user.Email,
@@ -946,10 +960,10 @@ func TestUpdateUserApi(t *testing.T) {
 				UserName: "nonexistent",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.FullName, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.FullName, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, sql.ErrNoRows)
+				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, db.ErrRecordNotFound)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -961,7 +975,7 @@ func TestUpdateUserApi(t *testing.T) {
 				UserName: user.Username,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, "unauthorized_user", user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{
@@ -993,7 +1007,7 @@ func TestUpdateUserApi(t *testing.T) {
 			name: "BadRequest",
 			body: req.UpdateUserRequest{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(0)
@@ -1010,7 +1024,7 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{}, sql.ErrConnDone)
@@ -1027,7 +1041,7 @@ func TestUpdateUserApi(t *testing.T) {
 				Email:    user.Email,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, time.Minute)
+				auth.AddAuthorization(t, request, tokenMaker, auth.AuthTypeBearer, user.Username, user.Role, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUserByUserName(gomock.Any(), gomock.Any()).Times(1).Return(db.GetUserByUserNameRow{
@@ -1059,7 +1073,7 @@ func TestUpdateUserApi(t *testing.T) {
 			cfg, err := pkg.LoadConfig("../../")
 			require.NoError(t, err)
 
-			server := server.NewTestServer(t, store, &cfg)
+			server := server.NewTestServer(t, store, &cfg, nil)
 			userHandler := NewUserHandler(server)
 			userHandler.MapRoutes()
 			recorder := httptest.NewRecorder()
@@ -1076,6 +1090,161 @@ func TestUpdateUserApi(t *testing.T) {
 			tc.checkResponse(t, recorder)
 		})
 	}
+}
+
+func TestVerifyUserEmailApi(t *testing.T) {
+	user, _ := RandomUser(t)
+	verifyEmail := RandomVerifyEmail(t, user)
+
+	testCases := []struct {
+		name          string
+		query         req.VerifyUserEmailRequest
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name: "OK",
+			query: req.VerifyUserEmailRequest{
+				EmailId:    verifyEmail.ID,
+				SecretCode: verifyEmail.SecretCode,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				arg := db.VerifyUserEmailTxParams{
+					EmailId:    verifyEmail.ID,
+					SecretCode: verifyEmail.SecretCode,
+				}
+
+				store.EXPECT().
+					VerifyUserEmailTx(gomock.Any(), gomock.Eq(arg)).
+					Times(1).
+					Return(db.VerifyUserEmailTxResult{
+						User: db.User{
+							Username:          user.Username,
+							FullName:          user.FullName,
+							Email:             user.Email,
+							HashedPassword:    user.HashedPassword,
+							IsEmailVerified:   true,
+							PasswordChangedAt: user.PasswordChangedAt,
+							CreatedAt:         user.CreatedAt,
+						},
+						VerifyEmail: db.VerifyEmail{
+							ID:         verifyEmail.ID,
+							Username:   user.Username,
+							Email:      user.Email,
+							SecretCode: verifyEmail.SecretCode,
+							ExpiredAt:  verifyEmail.ExpiredAt,
+							IsUsed:     true,
+							CreatedAt:  verifyEmail.CreatedAt,
+						},
+					}, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				if recorder.Code == http.StatusOK {
+					t.Log("Response body: ", recorder.Body.String())
+				}
+				require.Equal(t, http.StatusOK, recorder.Code)
+
+				requireBodyMatchVerifyEmail(t, recorder.Body, true)
+			},
+		},
+		{
+			name:  "BadRequest",
+			query: req.VerifyUserEmailRequest{},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "NotFound",
+			query: req.VerifyUserEmailRequest{
+				EmailId:    verifyEmail.ID,
+				SecretCode: verifyEmail.SecretCode,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.VerifyUserEmailTxResult{}, db.ErrRecordNotFound)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name: "InternalError",
+			query: req.VerifyUserEmailRequest{
+				EmailId:    verifyEmail.ID,
+				SecretCode: verifyEmail.SecretCode,
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.VerifyUserEmailTxResult{}, sql.ErrConnDone)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			// start test server and send request
+			cfg, err := pkg.LoadConfig("../../")
+			require.NoError(t, err)
+
+			server := server.NewTestServer(t, store, &cfg, nil)
+			userHandler := NewUserHandler(server)
+			userHandler.MapRoutes()
+
+			recorder := httptest.NewRecorder()
+
+			url := "/user/verify-email"
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			// Add query parameters
+			q := request.URL.Query()
+			q.Add("emailId", fmt.Sprint(tc.query.EmailId))
+			q.Add("secretCode", tc.query.SecretCode)
+			request.URL.RawQuery = q.Encode()
+
+			server.Router.ServeHTTP(recorder, request)
+			tc.checkResponse(t, recorder)
+		})
+	}
+}
+
+// Helper function to check response body
+func requireBodyMatchVerifyEmail(t *testing.T, body *bytes.Buffer, isVerified bool) {
+	data, err := io.ReadAll(body)
+	require.NoError(t, err)
+
+	var response struct {
+		Data struct {
+			IsVerified bool `json:"isVerified"`
+		} `json:"data"`
+		Message    string `json:"message"`
+		StatusCode int    `json:"statusCode"`
+	}
+
+	err = json.Unmarshal(data, &response)
+	require.NoError(t, err)
+	require.Equal(t, isVerified, response.Data.IsVerified)
 }
 
 // requireBodyMatchUser checks if the response body matches user

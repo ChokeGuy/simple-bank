@@ -38,7 +38,7 @@ type SesEmailSender struct {
 }
 
 // NewSesEmailSender initializes a new SesEmailSender
-func NewSesEmailSender() (*SesEmailSender, error) {
+func NewSesEmailSender() (EmailSender, error) {
 	envCfg, err := pkg.LoadConfig("../../")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment variables: %v", err)

@@ -37,3 +37,7 @@ func (h *ServiceHandler) GetListAccount(ctx context.Context, req *pb.ListAccount
 func (h *ServiceHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
 	return h.UserHandler.UpdateUser(ctx, req)
 }
+
+func (h *ServiceHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEmailRequest) (*pb.VerifyUserEmailResponse, error) {
+	return h.UserHandler.VerifyUserEmail(ctx, req)
+}

@@ -14,8 +14,8 @@ type JWTMaker struct {
 }
 
 // CreateToken creates a new token for a specific username and duration.
-func (maker *JWTMaker) CreateToken(username string, duration time.Duration) (string, *tk.Payload, error) {
-	payload, err := tk.NewPayload(username, duration)
+func (maker *JWTMaker) CreateToken(username string, role string, duration time.Duration) (string, *tk.Payload, error) {
+	payload, err := tk.NewPayload(username, role, duration)
 
 	if err != nil {
 		return "", payload, err

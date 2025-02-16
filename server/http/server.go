@@ -5,6 +5,7 @@ import (
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
+	"github.com/ChokeGuy/simple-bank/worker"
 
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
@@ -17,10 +18,11 @@ import (
 
 // Server serves HTTP requests for our banking service.
 type Server struct {
-	Config     *pkg.Config
-	Store      db.Store
-	Router     *gin.Engine
-	TokenMaker token.Maker
+	Config          *pkg.Config
+	Store           db.Store
+	Router          *gin.Engine
+	TokenMaker      token.Maker
+	TaskDistributor worker.TaskDistributor
 }
 
 // NewServer creates a new HTTP server and set up routing.
@@ -28,12 +30,14 @@ func NewServer(
 	store db.Store,
 	config *pkg.Config,
 	tokenMaker token.Maker,
+	taskDistributor worker.TaskDistributor,
 ) (*Server, error) {
 
 	server := &Server{
-		Store:      store,
-		TokenMaker: tokenMaker,
-		Config:     config,
+		Store:           store,
+		TokenMaker:      tokenMaker,
+		Config:          config,
+		TaskDistributor: taskDistributor,
 	}
 
 	router := gin.Default()
@@ -48,11 +52,11 @@ func NewServer(
 }
 
 // NewTestServer creates a new HTTP server for testing.
-func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config) *Server {
+func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor worker.TaskDistributor) *Server {
 	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
 	require.NoError(t, err)
 
-	server, err := NewServer(store, cf, tokenMaker)
+	server, err := NewServer(store, cf, tokenMaker, taskDistributor)
 	require.NoError(t, err)
 
 	return server

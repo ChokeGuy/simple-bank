@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"net"
 	"net/http"
 	"os"
 
+	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -23,12 +23,13 @@ import (
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	grpcSv "github.com/ChokeGuy/simple-bank/server/grpc"
 	httpSv "github.com/ChokeGuy/simple-bank/server/http"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/gin-gonic/gin"
 	migrate "github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rakyll/statik/fs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -36,7 +37,6 @@ import (
 )
 
 func main() {
-
 	cf, err := cf.LoadConfig("./")
 
 	if err != nil {
@@ -47,7 +47,7 @@ func main() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
-	conn, err := sql.Open(cf.DBDriver, cf.DBSource)
+	conn, err := pgxpool.New(context.Background(), cf.DBSource)
 
 	if err != nil {
 		log.Fatal().Msgf("cannot connect to db: %v", err)
@@ -61,8 +61,15 @@ func main() {
 		log.Fatal().Msgf("Token maker err: %v", err)
 	}
 
-	go runHttpServer(cf, store, tokenMaker)
-	runGrpcServer(cf, store, tokenMaker)
+	redisOpt := asynq.RedisClientOpt{
+		Addr: cf.RedisAddress,
+	}
+
+	taskDistributor := worker.NewRedisTaskDistributor(redisOpt)
+
+	go worker.RunTaskProcessor(redisOpt, store)
+	go runHttpServer(cf, store, tokenMaker, taskDistributor)
+	runGrpcServer(cf, store, tokenMaker, taskDistributor)
 }
 
 // setUpRouter set up all routes
@@ -83,8 +90,8 @@ func setUpRouter(server *httpSv.Server) {
 }
 
 // runHttpServer run http server
-func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
-	server, err := httpSv.NewServer(store, &cfg, tokenMaker)
+func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+	server, err := httpSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
 
 	if err != nil {
 		log.Fatal().Msgf("cannot create server: %v", err)
@@ -99,8 +106,8 @@ func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 }
 
 // runGrpcServer run grpc server
-func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
-	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
+func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+	server, err := grpcSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
 	if err != nil {
 		log.Fatal().Msgf("cannot create server: %v", err)
 	}
@@ -125,8 +132,8 @@ func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
 }
 
 // runGatewayServer run grpc-gateway server
-func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker) {
-	server, err := grpcSv.NewServer(store, &cfg, tokenMaker)
+func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+	server, err := grpcSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
 	if err != nil {
 		log.Fatal().Msgf("cannot create server: %v", err)
 	}

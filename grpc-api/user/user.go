@@ -2,27 +2,31 @@ package user
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/ChokeGuy/simple-bank/consts"
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	"github.com/ChokeGuy/simple-bank/pb"
-	"github.com/ChokeGuy/simple-bank/pkg/errors"
+	myErr "github.com/ChokeGuy/simple-bank/pkg/errors"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	sv "github.com/ChokeGuy/simple-bank/server/grpc"
+	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
 	"github.com/ChokeGuy/simple-bank/validations"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
-	"github.com/lib/pq"
 )
 
 type UserHandler struct {
@@ -33,7 +37,35 @@ func NewUserHandler(server *sv.Server) *UserHandler {
 	return &UserHandler{Server: server}
 }
 
-func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error) {
+// Create radom user
+func RandomUser(t *testing.T) (db.User, string) {
+	password := util.RandomPassword()
+	hashedPassword, err := pw.HashPassword(password)
+	require.NoError(t, err)
+
+	return db.User{
+		Username:       util.RandomOwner(),
+		FullName:       util.RandomOwner(),
+		Email:          util.RandomEmail(),
+		Role:           util.DepositorRole,
+		HashedPassword: hashedPassword,
+	}, password
+}
+
+// Create random verify email
+func RandomVerifyEmail(t *testing.T, user db.User) db.VerifyEmail {
+	return db.VerifyEmail{
+		ID:         util.RandomInt(1, 10000),
+		Username:   user.Username,
+		Email:      user.Email,
+		IsUsed:     false,
+		SecretCode: util.RandomString(32),
+		ExpiredAt:  time.Now().Add(time.Hour),
+		CreatedAt:  time.Now(),
+	}
+}
+
+func (h *UserHandler) authorizeUser(ctx context.Context, accessibleRoles []string) (*token.Payload, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 
 	if !ok {
@@ -62,14 +94,28 @@ func (h *UserHandler) authorizeUser(ctx context.Context) (*token.Payload, error)
 		return nil, fmt.Errorf("invalid access token")
 	}
 
+	if !hasPermission(payload.Role, accessibleRoles) {
+		return nil, fmt.Errorf("permission denied")
+	}
+
 	return payload, nil
+}
+
+func hasPermission(userRole string, accessibleRoles []string) bool {
+	for _, role := range accessibleRoles {
+		if userRole == role {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
 	violations := validateCreateUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	hashedPassword, err := pw.HashPassword(req.GetPassword())
@@ -78,28 +124,41 @@ func (h *UserHandler) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
 		return nil, status.Errorf(codes.Internal, "failed to hash password: %v", err)
 	}
 
-	arg := db.CreateUserParams{
-		Username:       req.GetUserName(),
-		FullName:       req.GetFullName(),
-		Email:          req.GetEmail(),
-		HashedPassword: hashedPassword,
+	arg := db.CreateUserTxParams{
+		CreateUserParams: db.CreateUserParams{
+			Username:       req.UserName,
+			FullName:       req.FullName,
+			Email:          req.Email,
+			HashedPassword: hashedPassword,
+		},
+		AfterCreate: func(user db.User) error {
+			//Send verification email to user
+			taskPayload := &worker.PayloadSendVerifyEmail{
+				UserName: user.Username,
+			}
+
+			opts := []asynq.Option{
+				asynq.MaxRetry(10),
+				asynq.ProcessIn(10 * time.Second),
+				asynq.Queue(worker.QueueDefault),
+			}
+
+			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+		},
 	}
 
-	user, err := h.Store.CreateUser(ctx, arg)
+	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			switch pqErr.Code.Name() {
-			case "unique_violation":
-				return nil, status.Errorf(codes.AlreadyExists, "user already exists: %v", err)
-			}
+		if db.ErrorCode(err) == db.UniqueViolation {
+			return nil, status.Errorf(codes.AlreadyExists, "%s", err.Error())
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
 	}
 
 	response := &pb.CreateUserResponse{
-		User: convertUser(user),
+		User: convertUser(user.User),
 	}
 	return response, nil
 }
@@ -108,13 +167,13 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 	violations := validateLoginUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
 	user, err := h.Store.GetUserByUserName(ctx, req.GetUserName())
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user not found")
 		}
 
@@ -142,13 +201,13 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 		}
 	}
 
-	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create access token: %v", err)
 	}
 
-	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.RefreshTokenDuration)
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create refresh token: %v", err)
@@ -191,29 +250,32 @@ func (h *UserHandler) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (
 }
 
 func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
-	authPayload, err := h.authorizeUser(ctx)
+	authPayload, err := h.authorizeUser(ctx, []string{
+		util.DepositorRole,
+		util.BankerRole,
+	})
 
 	if err != nil {
-		return nil, errors.UnAuthorizedError(err)
+		return nil, myErr.UnAuthorizedError(err)
 	}
 
 	violations := validateUpdateUserRequest(req)
 
 	if violations != nil {
-		return nil, errors.InvalidAgrumentError(violations)
+		return nil, myErr.InvalidAgrumentError(violations)
 	}
 
-	if authPayload.UserName != req.GetUserName() {
+	if authPayload.Role != util.BankerRole && authPayload.UserName != req.GetUserName() {
 		return nil, status.Errorf(codes.PermissionDenied, "unauthorized user")
 	}
 
 	arg := db.UpdateUserParams{
 		Username: req.GetUserName(),
-		FullName: sql.NullString{
+		FullName: pgtype.Text{
 			String: req.GetFullName(),
 			Valid:  req.FullName != nil,
 		},
-		Email: sql.NullString{
+		Email: pgtype.Text{
 			String: req.GetEmail(),
 			Valid:  req.Email != nil,
 		},
@@ -222,7 +284,7 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	user, err := h.Store.UpdateUser(ctx, arg)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user not found")
 		}
 
@@ -235,21 +297,48 @@ func (h *UserHandler) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return response, nil
 }
 
+func (h *UserHandler) VerifyUserEmail(ctx context.Context, req *pb.VerifyUserEmailRequest) (*pb.VerifyUserEmailResponse, error) {
+	violations := validateVerifyUserEmailRequest(req)
+
+	if violations != nil {
+		return nil, myErr.InvalidAgrumentError(violations)
+	}
+
+	arg := db.VerifyUserEmailTxParams{
+		EmailId:    req.GetEmailId(),
+		SecretCode: req.GetSecretCode(),
+	}
+
+	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
+
+	if err != nil {
+		if errors.Is(err, db.ErrRecordNotFound) {
+			return nil, status.Errorf(codes.NotFound, "email verification not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get email verification: %v", err)
+	}
+
+	response := &pb.VerifyUserEmailResponse{
+		IsVerified: verifyEmail.User.IsEmailVerified,
+	}
+
+	return response, nil
+}
 func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
-		violations = append(violations, errors.FieldViolation("password", err))
+		violations = append(violations, myErr.FieldViolation("password", err))
 	}
 
 	if err := validations.ValidateFullName(req.GetFullName()); err != nil {
-		violations = append(violations, errors.FieldViolation("fullName", err))
+		violations = append(violations, myErr.FieldViolation("fullName", err))
 	}
 
 	if err := validations.ValidateEmail(req.GetEmail()); err != nil {
-		violations = append(violations, errors.FieldViolation("email", err))
+		violations = append(violations, myErr.FieldViolation("email", err))
 	}
 
 	return violations
@@ -257,11 +346,11 @@ func validateCreateUserRequest(req *pb.CreateUserRequest) (violations []*errdeta
 
 func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if err := validations.ValidatePassword(req.GetPassword()); err != nil {
-		violations = append(violations, errors.FieldViolation("password", err))
+		violations = append(violations, myErr.FieldViolation("password", err))
 	}
 
 	return violations
@@ -269,19 +358,31 @@ func validateLoginUserRequest(req *pb.LoginUserRequest) (violations []*errdetail
 
 func validateUpdateUserRequest(req *pb.UpdateUserRequest) (violations []*errdetails.BadRequest_FieldViolation) {
 	if err := validations.ValidateUsername(req.GetUserName()); err != nil {
-		violations = append(violations, errors.FieldViolation("userName", err))
+		violations = append(violations, myErr.FieldViolation("userName", err))
 	}
 
 	if req.FullName != nil {
 		if err := validations.ValidateFullName(req.GetFullName()); err != nil {
-			violations = append(violations, errors.FieldViolation("fullName", err))
+			violations = append(violations, myErr.FieldViolation("fullName", err))
 		}
 	}
 
 	if req.Email != nil {
 		if err := validations.ValidateEmail(req.GetEmail()); err != nil {
-			violations = append(violations, errors.FieldViolation("email", err))
+			violations = append(violations, myErr.FieldViolation("email", err))
 		}
+	}
+
+	return violations
+}
+
+func validateVerifyUserEmailRequest(req *pb.VerifyUserEmailRequest) (violations []*errdetails.BadRequest_FieldViolation) {
+	if err := validations.ValidateEmailId(req.GetEmailId()); err != nil {
+		violations = append(violations, myErr.FieldViolation("emailId", err))
+	}
+
+	if err := validations.ValidateSecretCode(req.GetSecretCode()); err != nil {
+		violations = append(violations, myErr.FieldViolation("secretCode", err))
 	}
 
 	return violations

@@ -38,7 +38,7 @@ type CreateSessionParams struct {
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
-	row := q.db.QueryRowContext(ctx, createSession,
+	row := q.db.QueryRow(ctx, createSession,
 		arg.ID,
 		arg.Username,
 		arg.RefreshToken,
@@ -69,7 +69,7 @@ WHERE
 `
 
 func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, deleteSession, id)
+	_, err := q.db.Exec(ctx, deleteSession, id)
 	return err
 }
 
@@ -100,7 +100,7 @@ type GetSessionByIdRow struct {
 }
 
 func (q *Queries) GetSessionById(ctx context.Context, id uuid.UUID) (GetSessionByIdRow, error) {
-	row := q.db.QueryRowContext(ctx, getSessionById, id)
+	row := q.db.QueryRow(ctx, getSessionById, id)
 	var i GetSessionByIdRow
 	err := row.Scan(
 		&i.ID,
@@ -141,7 +141,7 @@ type GetSessionByUserNameRow struct {
 }
 
 func (q *Queries) GetSessionByUserName(ctx context.Context, username string) (GetSessionByUserNameRow, error) {
-	row := q.db.QueryRowContext(ctx, getSessionByUserName, username)
+	row := q.db.QueryRow(ctx, getSessionByUserName, username)
 	var i GetSessionByUserNameRow
 	err := row.Scan(
 		&i.ID,

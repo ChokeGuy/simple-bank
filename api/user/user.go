@@ -1,7 +1,7 @@
 package user
 
 import (
-	"database/sql"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -16,8 +16,10 @@ import (
 	sv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/util"
 	pw "github.com/ChokeGuy/simple-bank/util/password"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
+	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +40,7 @@ func (h *UserHandler) MapRoutes() {
 	router.POST("/auth/login", h.loginUser)
 	router.POST("/auth/refresh-token", h.refreshNewToken)
 	router.GET("/user", h.getUserByUserName)
+	router.GET("/user/verify-email", h.verifyUserEmail)
 
 	authRoutes := router.Group("/").Use(auth.AuthMiddleWare(h.TokenMaker))
 	authRoutes.PATCH("/user/update", h.updateUser)
@@ -53,8 +56,22 @@ func RandomUser(t *testing.T) (db.User, string) {
 		Username:       util.RandomOwner(),
 		FullName:       util.RandomOwner(),
 		Email:          util.RandomEmail(),
+		Role:           util.DepositorRole,
 		HashedPassword: hashedPassword,
 	}, password
+}
+
+// Create random verify email
+func RandomVerifyEmail(t *testing.T, user db.User) db.VerifyEmail {
+	return db.VerifyEmail{
+		ID:         util.RandomInt(1, 10000),
+		Username:   user.Username,
+		Email:      user.Email,
+		IsUsed:     false,
+		SecretCode: util.RandomString(32),
+		ExpiredAt:  time.Now().Add(time.Hour),
+		CreatedAt:  time.Now(),
+	}
 }
 
 func RandomToken(t *testing.T, userName string) string {
@@ -64,7 +81,7 @@ func RandomToken(t *testing.T, userName string) string {
 	paseto, err := paseto.NewPasetoMaker(cfg.SymetricKey)
 	require.NoError(t, err)
 
-	token, _, err := paseto.CreateToken(userName, time.Hour)
+	token, _, err := paseto.CreateToken(userName, util.DepositorRole, time.Hour)
 	require.NoError(t, err)
 
 	return token
@@ -98,22 +115,35 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 		return
 	}
 
-	arg := db.CreateUserParams{
-		Username:       req.UserName,
-		FullName:       req.FullName,
-		Email:          req.Email,
-		HashedPassword: hashedPassword,
+	arg := db.CreateUserTxParams{
+		CreateUserParams: db.CreateUserParams{
+			Username:       req.UserName,
+			FullName:       req.FullName,
+			Email:          req.Email,
+			HashedPassword: hashedPassword,
+		},
+		AfterCreate: func(user db.User) error {
+			//Send verification email to user
+			taskPayload := &worker.PayloadSendVerifyEmail{
+				UserName: user.Username,
+			}
+
+			opts := []asynq.Option{
+				asynq.MaxRetry(10),
+				asynq.ProcessIn(10 * time.Second),
+				asynq.Queue(worker.QueueCritical),
+			}
+
+			return h.TaskDistributor.DistributeTaskSendVerifyEmail(ctx, taskPayload, opts...)
+		},
 	}
 
-	result, err := h.Store.CreateUser(ctx, arg)
+	user, err := h.Store.CreateUserTx(ctx, arg)
 
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			switch pqErr.Code.Name() {
-			case "unique_violation":
-				ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, pqErr.Message))
-				return
-			}
+		if errCode := db.ErrorCode(err); errCode == db.UniqueViolation {
+			ctx.JSON(http.StatusForbidden, res.ErrorResponse(http.StatusForbidden, err.Error()))
+			return
 		}
 
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -121,11 +151,11 @@ func (h *UserHandler) createUser(ctx *gin.Context) {
 	}
 
 	response := dto.UserResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          user.User.Username,
+		FullName:          user.User.FullName,
+		Email:             user.User.Email,
+		PasswordChangedAt: user.User.PasswordChangedAt.String(),
+		CreatedAt:         user.User.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User created successfully"))
@@ -139,10 +169,10 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.Store.GetUserByUserName(ctx, req.UserName)
+	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -151,11 +181,11 @@ func (h *UserHandler) getUserByUserName(ctx *gin.Context) {
 	}
 
 	response := dto.GetUserByUserNameResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          user.Username,
+		FullName:          user.FullName,
+		Email:             user.Email,
+		PasswordChangedAt: user.PasswordChangedAt.String(),
+		CreatedAt:         user.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User retrieved successfully"))
@@ -172,7 +202,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -181,7 +211,7 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 	}
 
 	if err := pw.CheckPassword(req.Password, user.HashedPassword); err != nil {
-		ctx.JSON(http.StatusUnauthorized, res.ErrorResponse(http.StatusUnauthorized, "Invalid password"))
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, "Invalid password"))
 		return
 	}
 
@@ -205,14 +235,14 @@ func (h *UserHandler) loginUser(ctx *gin.Context) {
 		}
 	}
 
-	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.AccessTokenDuration)
+	accessToken, aTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
 		return
 	}
 
-	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, h.Config.RefreshTokenDuration)
+	refreshToken, rTkPayload, err := h.TokenMaker.CreateToken(user.Username, user.Role, h.Config.RefreshTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -265,7 +295,7 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 	user, err := h.Store.GetUserByUserName(ctx, req.UserName)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "User not found"))
 			return
 		}
@@ -282,11 +312,11 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 
 	arg := db.UpdateUserParams{
 		Username: req.UserName,
-		FullName: sql.NullString{String: req.FullName, Valid: req.FullName != ""},
-		Email:    sql.NullString{String: req.Email, Valid: req.Email != ""},
+		FullName: pgtype.Text{String: req.FullName, Valid: req.FullName != ""},
+		Email:    pgtype.Text{String: req.Email, Valid: req.Email != ""},
 	}
 
-	result, err := h.Store.UpdateUser(ctx, arg)
+	updateUser, err := h.Store.UpdateUser(ctx, arg)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
@@ -294,14 +324,45 @@ func (h *UserHandler) updateUser(ctx *gin.Context) {
 	}
 
 	response := dto.UserResponse{
-		UserName:          result.Username,
-		FullName:          result.FullName,
-		Email:             result.Email,
-		PasswordChangedAt: result.PasswordChangedAt.String(),
-		CreatedAt:         result.CreatedAt.String(),
+		UserName:          updateUser.Username,
+		FullName:          updateUser.FullName,
+		Email:             updateUser.Email,
+		PasswordChangedAt: updateUser.PasswordChangedAt.String(),
+		CreatedAt:         updateUser.CreatedAt.String(),
 	}
 
 	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "User updated successfully"))
+}
+
+func (h *UserHandler) verifyUserEmail(ctx *gin.Context) {
+	var req dto.VerifyUserEmailRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, res.ErrorResponse(http.StatusBadRequest, err.Error()))
+		return
+	}
+
+	arg := db.VerifyUserEmailTxParams{
+		EmailId:    req.EmailId,
+		SecretCode: req.SecretCode,
+	}
+
+	verifyEmail, err := h.Store.VerifyUserEmailTx(ctx, arg)
+
+	if err != nil {
+		if errors.Is(err, db.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Email verification not found"))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))
+		return
+	}
+
+	response := dto.VerifyUserEmailResponse{
+		IsVerified: verifyEmail.User.IsEmailVerified,
+	}
+
+	ctx.JSON(http.StatusOK, res.SuccessResponse(response, "Email verified successfully"))
 }
 
 func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
@@ -322,7 +383,7 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 	session, err := h.Store.GetSessionById(ctx, uuid.MustParse(claims.ID))
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, db.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, res.ErrorResponse(http.StatusNotFound, "Session not found"))
 			return
 		}
@@ -350,7 +411,7 @@ func (h *UserHandler) refreshNewToken(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, payload, err := h.TokenMaker.CreateToken(claims.UserName, h.Config.AccessTokenDuration)
+	accessToken, payload, err := h.TokenMaker.CreateToken(claims.UserName, claims.Role, h.Config.AccessTokenDuration)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, res.ErrorResponse(http.StatusInternalServerError, err.Error()))

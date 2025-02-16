@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "github.com/ChokeGuy/simple-bank/pb";
+
+message VerifyUserEmailRequest {
+    int64 emailId = 1;
+    string secretCode = 2;
+}
+
+message VerifyUserEmailResponse {
+    bool isVerified = 1;
+}
+

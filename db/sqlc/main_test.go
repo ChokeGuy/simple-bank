@@ -1,18 +1,16 @@
 package sqlc
 
 import (
-	"database/sql"
+	"context"
 	"log"
 	"os"
 	"testing"
 
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
-
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var testQueries *Queries
-var testDb *sql.DB
+var testStore Store
 
 func TestMain(m *testing.M) {
 
@@ -23,13 +21,13 @@ func TestMain(m *testing.M) {
 		log.Fatalf("cannot load config: %v", err)
 	}
 
-	testDb, err = sql.Open(cf.DBDriver, cf.DBSource)
+	connPool, err := pgxpool.New(context.Background(), cf.DBSource)
 
 	if err != nil {
 		log.Fatalf("cannot connect to db: %v", err)
 	}
 
-	testQueries = New(testDb)
+	testStore = NewStore(connPool)
 
 	os.Exit(m.Run())
 }

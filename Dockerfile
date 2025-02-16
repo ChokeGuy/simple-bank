@@ -18,7 +18,7 @@ RUN chmod +x /app/start.sh
 
 RUN apk add --no-cache make postgresql-client
 
-EXPOSE 8080
+EXPOSE 8080 9000
 
 ENTRYPOINT ["/app/start.sh"]
 CMD ["/app/main"]

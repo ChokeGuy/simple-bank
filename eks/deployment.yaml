@@ -21,3 +21,7 @@ spec:
         ports:
         - name: http
           containerPort: 8080
+          name: http-server
+        - name: grpc
+          containerPort: 9000
+          name: grpc-server
