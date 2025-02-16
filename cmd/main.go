@@ -12,6 +12,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/rakyll/statik/fs"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -84,6 +85,10 @@ func main() {
 		PoolSize:     10,
 	}
 
+	if cf.ENV == "development" {
+		redisOpt.TLSConfig = nil
+	}
+
 	taskDistributor := worker.NewRedisTaskDistributor(redisOpt)
 
 	waitGroup, ctx := errgroup.WithContext(ctx)
@@ -104,15 +109,37 @@ func setUpRouter(server *httpSv.Server) {
 		ctx.JSON(http.StatusOK, "Welcome to Simple Bank")
 	})
 
+	// Setup CORS
+	corsConfig := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Origin", "Content-Type", "Authorization"},
+		ExposedHeaders:   []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           int(12 * time.Hour / time.Second),
+	})
+	server.Router.Use(func(c *gin.Context) {
+		corsConfig.HandlerFunc(c.Writer, c.Request)
+		c.Next()
+	})
+
+	// Map all routes
+	mapAPIRoutes(server)
+}
+
+// mapAPIRoutes maps all API routes
+func mapAPIRoutes(server *httpSv.Server) {
+	// User routes
 	userHandler := user.NewUserHandler(server)
 	userHandler.MapRoutes()
 
-	tranferHandler := transfer.NewTransferHandler(server)
-	tranferHandler.MapRoutes()
+	// Transfer routes
+	transferHandler := transfer.NewTransferHandler(server)
+	transferHandler.MapRoutes()
 
+	// Account routes
 	accountHandler := account.NewAccountHandler(server)
 	accountHandler.MapRoutes()
-
 }
 
 // runHttpServer run http server
