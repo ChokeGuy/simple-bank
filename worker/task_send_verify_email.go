@@ -14,6 +14,7 @@ import (
 
 const (
 	TaskSendVerifyEmail = "task:send_verify_email"
+	httpVerifyEmail     = "https://api.my-simple-bank.org/user/verify-email"
 )
 
 type PayloadSendVerifyEmail struct {
@@ -75,7 +76,12 @@ func (processor *RedisTaskProcessor) ProcessTaskSendVerifyEmail(ctx context.Cont
 		return fmt.Errorf("fail to create verify email: %w", err)
 	}
 
-	verifyUrl := fmt.Sprintf("http://localhost:8080/user/verify-email?emailId=%d&secretCode=%s", verifyEmail.ID, verifyEmail.SecretCode)
+	verifyUrl := fmt.Sprintf(
+		"%s?emailId=%d&secretCode=%s",
+		httpVerifyEmail,
+		verifyEmail.ID,
+		verifyEmail.SecretCode,
+	)
 	receivers := []string{user.Email}
 
 	emailPayload := email.EmailPayload{
