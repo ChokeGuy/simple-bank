@@ -1,15 +1,18 @@
 package server
 
 import (
+	"context"
+	"net"
 	"testing"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/worker"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,9 +20,10 @@ import (
 type Server struct {
 	Config          *pkg.Config
 	Store           db.Store
-	Router          *gin.Engine
 	TokenMaker      token.Maker
 	TaskDistributor worker.TaskDistributor
+	GrpcServer      *grpc.Server
+	Listener        net.Listener
 }
 
 // NewServer creates a new GRPC server.
@@ -49,4 +53,22 @@ func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor
 	require.NoError(t, err)
 
 	return server
+}
+
+func (server *Server) Start() error {
+	log.Info().Msgf("starting gRPC server on %s", server.Config.GrpcServerAddress)
+	err := server.GrpcServer.Serve(server.Listener)
+
+	if err != nil {
+		log.Error().Err(err).Msg("cannot start gRPC server")
+		return err
+	}
+
+	return nil
+}
+
+func (server *Server) Stop(ctx context.Context) error {
+	log.Info().Msg("gracefully stopping gRPC server")
+	server.GrpcServer.GracefulStop()
+	return nil
 }

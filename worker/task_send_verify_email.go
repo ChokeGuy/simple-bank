@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
+	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
 	"github.com/ChokeGuy/simple-bank/pkg/email"
 	"github.com/ChokeGuy/simple-bank/util"
 	"github.com/hibiken/asynq"
@@ -14,7 +15,6 @@ import (
 
 const (
 	TaskSendVerifyEmail = "task:send_verify_email"
-	httpVerifyEmail     = "https://api.my-simple-bank.org/user/verify-email"
 )
 
 type PayloadSendVerifyEmail struct {
@@ -76,9 +76,15 @@ func (processor *RedisTaskProcessor) ProcessTaskSendVerifyEmail(ctx context.Cont
 		return fmt.Errorf("fail to create verify email: %w", err)
 	}
 
+	cf, err := pkg.LoadConfig("../../")
+
+	if err != nil {
+		return fmt.Errorf("fail to load config: %w", err)
+	}
+
 	verifyUrl := fmt.Sprintf(
 		"%s?emailId=%d&secretCode=%s",
-		httpVerifyEmail,
+		cf.ApiUrl+"/user/verify-email",
 		verifyEmail.ID,
 		verifyEmail.SecretCode,
 	)

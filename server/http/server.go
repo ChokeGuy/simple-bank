@@ -1,18 +1,20 @@
 package server
 
 import (
+	"context"
+	"net/http"
 	"testing"
 
 	db "github.com/ChokeGuy/simple-bank/db/sqlc"
 	pkg "github.com/ChokeGuy/simple-bank/pkg/config"
-	"github.com/ChokeGuy/simple-bank/worker"
-
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
 	"github.com/ChokeGuy/simple-bank/validations"
+	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,6 +25,7 @@ type Server struct {
 	Router          *gin.Engine
 	TokenMaker      token.Maker
 	TaskDistributor worker.TaskDistributor
+	HttpServer      *http.Server
 }
 
 // NewServer creates a new HTTP server and set up routing.
@@ -32,7 +35,6 @@ func NewServer(
 	tokenMaker token.Maker,
 	taskDistributor worker.TaskDistributor,
 ) (*Server, error) {
-
 	server := &Server{
 		Store:           store,
 		TokenMaker:      tokenMaker,
@@ -62,7 +64,22 @@ func NewTestServer(t *testing.T, store db.Store, cf *pkg.Config, taskDistributor
 	return server
 }
 
-// Start runs the HTTP server on a specific address.
-func (server *Server) Start(address string) error {
-	return server.Router.Run(address)
+func (server *Server) Start() error {
+	log.Info().Msgf("starting HTTP server on %s", server.Config.HttpServerAddress)
+	if err := server.HttpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+func (server *Server) Stop(ctx context.Context) error {
+	log.Info().Msg("gracefully stopping HTTP server")
+	err := server.HttpServer.Shutdown(ctx)
+
+	if err != nil {
+		log.Error().Err(err).Msg("fail to stop HTTP server")
+		return err
+	}
+	log.Info().Msg("HTTP server shutdown is complete")
+	return nil
 }

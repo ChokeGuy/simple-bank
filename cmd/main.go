@@ -6,11 +6,15 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/rakyll/statik/fs"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ChokeGuy/simple-bank/api/account"
 	"github.com/ChokeGuy/simple-bank/api/transfer"
@@ -20,6 +24,7 @@ import (
 	grpcapi "github.com/ChokeGuy/simple-bank/grpc-api"
 	"github.com/ChokeGuy/simple-bank/pb"
 	cf "github.com/ChokeGuy/simple-bank/pkg/config"
+	dbmigrations "github.com/ChokeGuy/simple-bank/pkg/db-migrations"
 	"github.com/ChokeGuy/simple-bank/pkg/logger"
 	"github.com/ChokeGuy/simple-bank/pkg/token"
 	"github.com/ChokeGuy/simple-bank/pkg/token/paseto"
@@ -27,20 +32,23 @@ import (
 	httpSv "github.com/ChokeGuy/simple-bank/server/http"
 	"github.com/ChokeGuy/simple-bank/worker"
 	"github.com/gin-gonic/gin"
-	migrate "github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rakyll/statik/fs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+var interruptSignal = []os.Signal{
+	os.Interrupt,
+	syscall.SIGTERM,
+	syscall.SIGQUIT,
+}
+
 func main() {
 	cf, err := cf.LoadConfig("./")
-
 	if err != nil {
 		log.Fatal().Msgf("cannot load config: %v", err)
 	}
@@ -49,14 +57,15 @@ func main() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
-	conn, err := pgxpool.New(context.Background(), cf.DBSource)
+	ctx, stop := signal.NotifyContext(context.Background(), interruptSignal...)
+	defer stop()
 
+	conn, err := pgxpool.New(ctx, cf.DBSource)
 	if err != nil {
 		log.Fatal().Msgf("cannot connect to db: %v", err)
 	}
 
-	runDBMigration(cf)
-
+	dbmigrations.RunDBMigration(cf)
 	store := db.NewStore(conn)
 	tokenMaker, err := paseto.NewPasetoMaker(cf.SymetricKey)
 	if err != nil {
@@ -77,9 +86,16 @@ func main() {
 
 	taskDistributor := worker.NewRedisTaskDistributor(redisOpt)
 
-	go worker.RunTaskProcessor(redisOpt, store)
-	go runHttpServer(cf, store, tokenMaker, taskDistributor)
-	runGrpcServer(cf, store, tokenMaker, taskDistributor)
+	waitGroup, ctx := errgroup.WithContext(ctx)
+
+	worker.RunTaskProcessor(ctx, waitGroup, redisOpt, store)
+	runHttpServer(ctx, waitGroup, cf, store, tokenMaker, taskDistributor)
+	runGrpcServer(ctx, waitGroup, cf, store, tokenMaker, taskDistributor)
+
+	err = waitGroup.Wait()
+	if err != nil {
+		log.Fatal().Msgf("error group error: %v", err)
+	}
 }
 
 // setUpRouter set up all routes
@@ -100,52 +116,89 @@ func setUpRouter(server *httpSv.Server) {
 }
 
 // runHttpServer run http server
-func runHttpServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+func runHttpServer(
+	ctx context.Context,
+	waitGroup *errgroup.Group,
+	cfg cf.Config,
+	store db.Store,
+	tokenMaker token.Maker,
+	taskDistributor worker.TaskDistributor,
+) {
 	server, err := httpSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
-
 	if err != nil {
-		log.Fatal().Msgf("cannot create server: %v", err)
+		log.Fatal().Msgf("cannot create HTTP server: %v", err)
 	}
 
 	setUpRouter(server)
 
-	err = server.Start(cfg.HttpServerAddress)
-	if err != nil {
-		log.Fatal().Msgf("cannot start server: %v", err)
+	server.HttpServer = &http.Server{
+		Addr:         server.Config.HttpServerAddress,
+		Handler:      server.Router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	waitGroup.Go(func() error {
+		return server.Start()
+	})
+
+	waitGroup.Go(func() error {
+		<-ctx.Done()
+		return server.Stop(context.Background())
+	})
 }
 
 // runGrpcServer run grpc server
-func runGrpcServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+func runGrpcServer(
+	ctx context.Context,
+	waitGroup *errgroup.Group,
+	cfg cf.Config,
+	store db.Store,
+	tokenMaker token.Maker,
+	taskDistributor worker.TaskDistributor,
+) {
 	server, err := grpcSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
 	if err != nil {
-		log.Fatal().Msgf("cannot create server: %v", err)
+		log.Fatal().Msgf("cannot create gRPC server: %v", err)
 	}
 
 	serviceHandler := grpcapi.NewServiceHandler(server)
 
+	server.Listener, err = net.Listen("tcp", server.Config.GrpcServerAddress)
+	if err != nil {
+		log.Fatal().Msgf("cannot listen on %s: %v", server.Config.GrpcServerAddress, err)
+	}
+
 	grpcLogger := grpc.UnaryInterceptor(logger.GrpcLogger)
-	grpcServer := grpc.NewServer(grpcLogger)
-	pb.RegisterSimpleBankServer(grpcServer, serviceHandler)
-	reflection.Register(grpcServer)
+	server.GrpcServer = grpc.NewServer(grpcLogger)
 
-	listener, err := net.Listen("tcp", cfg.GrpcServerAddress)
-	if err != nil {
-		log.Fatal().Msgf("cannot listen to grpc server: %v", err)
-	}
+	// Register service handler
+	pb.RegisterSimpleBankServer(server.GrpcServer, serviceHandler)
+	reflection.Register(server.GrpcServer)
 
-	log.Info().Msgf("start grpc server on %s", cfg.GrpcServerAddress)
-	err = grpcServer.Serve(listener)
-	if err != nil {
-		log.Fatal().Msgf("cannot start grpc server: %v", err)
-	}
+	waitGroup.Go(func() error {
+		return server.Start()
+	})
+
+	waitGroup.Go(func() error {
+		<-ctx.Done()
+		return server.Stop(ctx)
+	})
 }
 
 // runGatewayServer run grpc-gateway server
-func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, taskDistributor worker.TaskDistributor) {
+func runGatewayServer(
+	ctx context.Context,
+	waitGroup *errgroup.Group,
+	cfg cf.Config,
+	store db.Store,
+	tokenMaker token.Maker,
+	taskDistributor worker.TaskDistributor,
+) {
 	server, err := grpcSv.NewServer(store, &cfg, tokenMaker, taskDistributor)
 	if err != nil {
-		log.Fatal().Msgf("cannot create server: %v", err)
+		log.Fatal().Msgf("cannot create gateway server: %v", err)
 	}
 
 	serviceHandler := grpcapi.NewServiceHandler(server)
@@ -161,11 +214,9 @@ func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, tas
 
 	grpcMux := runtime.NewServeMux(jsonOption)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	err = pb.RegisterSimpleBankHandlerServer(ctx, grpcMux, serviceHandler)
 	if err != nil {
-		log.Fatal().Msgf("cannot register grpc handler: %v", err)
+		log.Fatal().Msgf("cannot register handler server: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -179,29 +230,30 @@ func runGatewayServer(cfg cf.Config, store db.Store, tokenMaker token.Maker, tas
 	swaggerHandler := http.StripPrefix("/swagger/", http.FileServer(statikFS))
 	mux.Handle("/swagger/", swaggerHandler)
 
-	listener, err := net.Listen("tcp", cfg.HttpServerAddress)
-	if err != nil {
-		log.Fatal().Msgf("cannot listen to grpc server: %v", err)
+	httpServer := &http.Server{
+		Handler: logger.HttpLogger(mux),
+		Addr:    cfg.HttpServerAddress,
 	}
 
-	log.Info().Msgf("start http gateway server on %s", cfg.HttpServerAddress)
-	handler := logger.HttpLogger(mux)
+	waitGroup.Go(func() error {
+		log.Info().Msgf("starting HTTP gateway server on %s", cfg.HttpServerAddress)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	})
 
-	err = http.Serve(listener, handler)
-	if err != nil {
-		log.Fatal().Msgf("cannot start HTTP Gateway Server: %v", err)
-	}
-}
+	waitGroup.Go(func() error {
+		<-ctx.Done()
+		log.Info().Msg("shutting down HTTP gateway server")
+		err := httpServer.Shutdown(context.Background())
 
-func runDBMigration(cfg cf.Config) {
-	migration, err := migrate.New(cfg.MigrationUrl, cfg.DBSource)
-	if err != nil {
-		log.Fatal().Msgf("cannot create migration: %v", err)
-	}
+		if err != nil {
+			log.Error().Err(err).Msg("Fail to shutdown HTTP gateway server")
+			return err
+		}
 
-	if err = migration.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatal().Msgf("failed to run migrate up: %v", err)
-	}
-
-	log.Info().Msg("db migration successfully")
+		log.Info().Msg("HTTP gateway server shutdown is complete")
+		return nil
+	})
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/ChokeGuy/simple-bank/pkg/logger"
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -16,7 +17,8 @@ const (
 )
 
 type TaskProcessor interface {
-	Start() error
+	start() error
+	shutdown()
 	ProcessTaskSendVerifyEmail(ctx context.Context, task *asynq.Task) error
 }
 
@@ -52,7 +54,7 @@ func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store, mailer
 	}
 }
 
-func (processor *RedisTaskProcessor) Start() error {
+func (processor *RedisTaskProcessor) start() error {
 	mux := asynq.NewServeMux()
 
 	mux.HandleFunc(TaskSendVerifyEmail, processor.ProcessTaskSendVerifyEmail)
@@ -60,18 +62,35 @@ func (processor *RedisTaskProcessor) Start() error {
 	return processor.server.Start(mux)
 }
 
+func (processor *RedisTaskProcessor) shutdown() {
+	processor.server.Shutdown()
+}
+
 // RunTaskProcessor run redis task processor
-func RunTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
+func RunTaskProcessor(
+	ctx context.Context,
+	waitGroup *errgroup.Group,
+	redisOpt asynq.RedisClientOpt,
+	store db.Store,
+) {
 	mailer, err := email.NewSesEmailSender()
 
 	if err != nil {
 		log.Fatal().Msgf("cannot create email sender: %v", err)
 	}
-
 	taskProcessor := NewRedisTaskProcessor(redisOpt, store, mailer)
-	log.Info().Msg("start task processor")
 
-	if err := taskProcessor.Start(); err != nil {
+	log.Info().Msg("start task processor")
+	if err := taskProcessor.start(); err != nil {
 		log.Fatal().Err(err).Msg("fail to start task processor")
 	}
+
+	waitGroup.Go(func() error {
+		<-ctx.Done()
+		log.Info().Msg("gracefully stopping task processor")
+		taskProcessor.shutdown()
+
+		log.Info().Msg("task processor shutdown complete")
+		return nil
+	})
 }
