@@ -121,7 +121,7 @@ APIS:
 - Create a new db migration:
 
     ```bash
-    make new_migration name=<migration_name>
+    make migratecreate name=<migration_name>
     ```
 
 ### How to run
